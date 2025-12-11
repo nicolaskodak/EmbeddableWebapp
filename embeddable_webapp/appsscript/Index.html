@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <base target="_top" />
+  </head>
+  <body>
+    <h3>歡迎使用 Apps Script Web App</h3>
+    <p>外部系統使用者 ID：<?= userId ?></p>
+    <p>token 簽發時間：<?= issuedAt ?></p>
+
+    <script>
+      if (window.self === window.top) {
+        // 不在 iframe 中，重新導向或顯示錯誤
+        document.body.innerHTML = '<h3>此頁面只能在授權的網站中使用</h3>';
+      } else {
+        window.APP_USER_ID = '<?= userId ?>';
+        console.log("User from Django:", window.APP_USER_ID);
+      }
+      
+    </script>
+
+    <!-- 這裡開始放你原本的 UI 功能 -->
+  </body>
+</html>

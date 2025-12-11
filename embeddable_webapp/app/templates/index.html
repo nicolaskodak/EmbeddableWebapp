@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Django + Apps Script SSO PoC</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        margin: 20px;
+      }
+      iframe {
+        width: 100%;
+        height: 70vh;
+        border: 1px solid #ccc;
+        margin-top: 20px;
+      }
+      label,
+      input {
+        font-size: 14px;
+      }
+      input[type="text"] {
+        padding: 4px 8px;
+      }
+      button {
+        padding: 4px 10px;
+        margin-left: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Django + Apps Script SSO PoC</h2>
+      <div>
+        <span>歡迎，{{ user_id }}</span>
+        <a href="{% url 'logout' %}" style="margin-left: 15px; color: #dc3545; text-decoration: none;">登出</a>
+      </div>
+    </div>
+
+    {% if messages %}
+    <div style="margin-bottom: 15px;">
+      {% for message in messages %}
+      <div style="padding: 10px; border-radius: 4px; margin-bottom: 10px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit">產生 token 並載入 Apps Script</button>
+    </form>
+
+    {% if iframe_src %}
+    <h3>以下是 Apps Script Web App（iframe）：</h3>
+    <iframe src="{{ iframe_src }}"></iframe>
+    {% endif %}
+
+    <script>
+    setTimeout(function() {
+        // 4 分鐘後自動重新整理（假設 token 有效期 5 分鐘）
+        location.reload();
+    }, 1 * 60 * 1000);
+    </script>
+  </body>
+</html>
