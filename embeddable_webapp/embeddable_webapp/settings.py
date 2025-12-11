@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 APPSCRIPT_SHARED_SECRET = os.environ.get("APPSCRIPT_SHARED_SECRET", "change-this-to-a-long-random-string")
-APPSCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyOIFgTQq0Flrs4bNky2qC1qpTj3FVYfA0aHJfdvsaTCh5CfOp7x1ZrcyIbGe86fLyrIQ/exec"
+APPSCRIPT_WEBAPP_URL = os.environ.get("APPSCRIPT_WEBAPP_URL", "https://script.google.com/macros/s/your-script-id/exec")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-q4v4hp-q0gxjhoofj66(0*yopci&s&6%44isx+74behxu%u%l2'
