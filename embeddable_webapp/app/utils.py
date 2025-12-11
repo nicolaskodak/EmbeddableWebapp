@@ -3,6 +3,7 @@ import base64
 import hmac
 import hashlib
 import time
+import requests
 from django.conf import settings
 
 
@@ -28,3 +29,49 @@ def generate_iframe_token(user_id: str, origin: str, max_age_seconds: int = 60) 
 
     token = f"{payload_b64}.{sig_b64}"
     return token
+
+
+def sync_user_to_appscript(username: str, email: str) -> bool:
+    """
+    同步使用者資料到 Apps Script (Google Sheets)
+    
+    Args:
+        username: 使用者名稱
+        email: 使用者電子郵件
+    
+    Returns:
+        bool: 是否同步成功
+    """
+    try:
+        # 產生管理員 token（用於呼叫 Apps Script API）
+        secret = settings.APPSCRIPT_SHARED_SECRET
+        ts = int(time.time())
+        action = "add_user"
+        payload = f"{action}|{username}|{email}|{ts}".encode("utf-8")
+        
+        signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).digest()
+        payload_b64 = base64url_encode(payload)
+        sig_b64 = base64url_encode(signature)
+        admin_token = f"{payload_b64}.{sig_b64}"
+        
+        # 呼叫 Apps Script API
+        url = settings.APPSCRIPT_WEBAPP_URL
+        params = {
+            'action': 'add_user',
+            'token': admin_token,
+            'username': username,
+            'email': email
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('success', False)
+        else:
+            print(f"同步使用者失敗: HTTP {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"同步使用者到 Apps Script 時發生錯誤: {str(e)}")
+        return False

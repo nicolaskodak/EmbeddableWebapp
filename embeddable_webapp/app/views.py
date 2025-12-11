@@ -36,6 +36,14 @@ def register_view(request):
         form = RegisterForm(request.POST)
         if form.is_valid():
             user = form.save()
+            
+            # 同步使用者到 Apps Script (Google Sheets)
+            from .utils import sync_user_to_appscript
+            sync_success = sync_user_to_appscript(user.username, user.email)
+            
+            if not sync_success:
+                messages.warning(request, '註冊成功，但同步到 Google Sheets 失敗。請聯繫管理員。')
+            
             login(request, user)
             messages.success(request, '註冊成功！')
             return redirect('home')
