@@ -20,6 +20,7 @@ function getSheet_() {
   return sheet;
 }
 
+
 function doGet(e) {
   var action = e.parameter.action || '';
   
@@ -40,13 +41,13 @@ function doGet(e) {
   var user = verifyToken_(token, allowedOrigins);
   if (!user) {
     return HtmlService.createHtmlOutput('<h3>未授權存取</h3>')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   // 檢查使用者是否存在於 Google Sheets
   if (!userExists_(user.userId)) {
     return HtmlService.createHtmlOutput('<h3>使用者不存在或已被停用</h3>')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   // 驗證成功，把 userId 帶進頁面 (Template)
@@ -56,7 +57,10 @@ function doGet(e) {
 
   return tpl
     .evaluate()
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .setTitle('Tomato BOM 表資料工具')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  
 }
 
 /**
@@ -242,4 +246,329 @@ function verifyToken_(token, allowedOrigins) {
   }
 
   return { userId: userId, ts: ts, origin: origin };
+}
+
+
+/* 請填入您的 Google Sheet ID */
+const SHEET_ID = "1RLrJPHJ1RpUbTIQl1V4m0Wgh7j2IXo0-eRWQPmeALSk"; 
+
+/* =========================================
+   資料庫設定
+   ========================================= */
+const DB_CONFIG = {
+  pos_items: { name: 'pos_items', cols: ['pos_item_id', 'pos_item_name', 'pos_option_group', 'pos_option_name', 'status'] },
+  pos_item_mapping: { name: 'pos_item_mapping', cols: ['pos_item_mapping_id', 'pos_item_id', 'product_id'] },
+  products: { name: 'products', cols: ['product_id', 'product_name', 'category_id'] },
+  product_categories: { name: 'product_categories', cols: ['category_id', 'category_name'] },
+  product_bom: { name: 'product_bom', cols: ['product_bom_id', 'product_id', 'ingredient_id', 'quantity', 'unit_id'] },
+  semi_product_bom: { name: 'semi_product_bom', cols: ['semi_product_bom_id', 'semi_product_id', 'ingredient_id', 'quantity', 'unit_id'] },
+  ingredients: { name: 'ingredients', cols: ['ingredient_id', 'ingredient_name', 'is_semi_product', 'purchase_source', 'erp_inventory_product_code'] },
+  units: { name: 'units', cols: ['unit_id', 'unit_name'] },
+  erp_inventory: { name: 'erp_inventory', cols: ['erp_inventory_id', 'product_code', 'erp_inventory_name', 'inventory_unit_id'] },
+  unit_conversions: { name: 'unit_conversions', cols: ['id', 'erp_inventory_id', 'warehouse_in_unit_id', 'warehouse_in_quantity', 'warehouse_in_base_unit_id', 'warehouse_out_unit_id', 'warehouse_out_quantity', 'warehouse_out_base_unit_id'] }
+};
+
+
+// --- 通用 DB Helper ---
+function getSpreadsheet() {
+  if (SHEET_ID && SHEET_ID.length > 20 && SHEET_ID !== "請將此處替換為您的_Google_Sheet_ID") {
+    return SpreadsheetApp.openById(SHEET_ID);
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getTableData(tableName) {
+  try {
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(tableName);
+    if (!sheet) return [];
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return [];
+
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    return rows.map(row => {
+      let obj = {};
+      headers.forEach((h, i) => { if(h) obj[h.trim()] = row[i]; });
+      return obj;
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+function getMaxId(tableName, idColName) {
+  const data = getTableData(tableName);
+  if (data.length === 0) return 0;
+  return Math.max(...data.map(d => Number(d[idColName]) || 0));
+}
+
+function insertRow(tableName, rowDataObj) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(tableName);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const newRow = headers.map(h => rowDataObj[h.trim()] === undefined ? '' : rowDataObj[h.trim()]);
+  sheet.appendRow(newRow);
+  return true;
+}
+
+function updateRow(tableName, idColName, idValue, updateObj) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(tableName);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idColIndex = headers.indexOf(idColName);
+  if (idColIndex === -1) return false;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idColIndex]) === String(idValue)) {
+      Object.keys(updateObj).forEach(key => {
+        const colIndex = headers.indexOf(key);
+        if (colIndex !== -1) sheet.getRange(i + 1, colIndex + 1).setValue(updateObj[key]);
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+function deleteRowByCondition(tableName, conditionFn) {
+   const ss = getSpreadsheet();
+   const sheet = ss.getSheetByName(tableName);
+   const data = sheet.getDataRange().getValues();
+   const headers = data[0];
+   for(let i = data.length - 1; i >= 1; i--) {
+     let rowObj = {};
+     headers.forEach((h, idx) => rowObj[h.trim()] = data[i][idx]);
+     if(conditionFn(rowObj)) {
+       sheet.deleteRow(i + 1);
+     }
+   }
+}
+
+function deleteRowById(tableName, idColName, idValue) {
+  return deleteRowByCondition(tableName, (row) => String(row[idColName]) === String(idValue));
+}
+
+/* =========================================
+   Module A: POS 名稱對應
+   ========================================= */
+function getModuleAData() {
+  const posItems = getTableData(DB_CONFIG.pos_items.name);
+  const mapping = getTableData(DB_CONFIG.pos_item_mapping.name);
+  const products = getTableData(DB_CONFIG.products.name);
+  
+  let mapIndex = {};
+  mapping.forEach(m => {
+    if(!mapIndex[m.pos_item_id]) mapIndex[m.pos_item_id] = [];
+    mapIndex[m.pos_item_id].push(m.product_id);
+  });
+  
+  const posData = posItems.map(p => {
+    return {
+      ...p,
+      mapped_product_ids: mapIndex[p.pos_item_id] || []
+    };
+  });
+  
+  return { posItems: posData, products: products };
+}
+
+function savePosMapping(posItemId, productIdsArray) {
+  deleteRowByCondition(DB_CONFIG.pos_item_mapping.name, (row) => String(row.pos_item_id) === String(posItemId));
+  let currentMaxId = getMaxId(DB_CONFIG.pos_item_mapping.name, 'pos_item_mapping_id');
+  productIdsArray.forEach(prodId => {
+    if(prodId) {
+      currentMaxId++;
+      insertRow(DB_CONFIG.pos_item_mapping.name, {
+        'pos_item_mapping_id': currentMaxId,
+        'pos_item_id': posItemId,
+        'product_id': prodId
+      });
+    }
+  });
+  return { success: true };
+}
+
+function updatePosStatus(posItemId, newStatus) {
+  updateRow(DB_CONFIG.pos_items.name, 'pos_item_id', posItemId, { 'status': newStatus });
+  return getModuleAData();
+}
+
+/* =========================================
+   Module B: 產品與食材資料
+   ========================================= */
+function getModuleBData() {
+  const products = getTableData(DB_CONFIG.products.name);
+  const categories = getTableData(DB_CONFIG.product_categories.name);
+  const ingredients = getTableData(DB_CONFIG.ingredients.name);
+  const units = getTableData(DB_CONFIG.units.name); // 取得單位列表
+  const semiProducts = ingredients.filter(i => String(i.is_semi_product).toLowerCase() === 'true');
+  
+  return { products, categories, semiProducts, ingredients, units }; 
+}
+
+// 單位管理功能
+function createUnit(name) {
+  const newId = getMaxId(DB_CONFIG.units.name, 'unit_id') + 1;
+  insertRow(DB_CONFIG.units.name, { 'unit_id': newId, 'unit_name': name });
+  return getModuleBData();
+}
+
+function updateUnit(id, name) {
+  updateRow(DB_CONFIG.units.name, 'unit_id', id, { 'unit_name': name });
+  return getModuleBData();
+}
+
+function createProductCategory(name) {
+  const newId = getMaxId(DB_CONFIG.product_categories.name, 'category_id') + 1;
+  insertRow(DB_CONFIG.product_categories.name, {
+    'category_id': newId,
+    'category_name': name
+  });
+  return getModuleBData(); 
+}
+
+function createNewProduct(name, categoryId) {
+  const newId = getMaxId(DB_CONFIG.products.name, 'product_id') + 1;
+  insertRow(DB_CONFIG.products.name, {
+    'product_id': newId, 'product_name': name, 'category_id': categoryId
+  });
+  return getModuleBData();
+}
+
+function updateProduct(productId, name, categoryId) {
+  updateRow(DB_CONFIG.products.name, 'product_id', productId, {
+    'product_name': name, 'category_id': categoryId
+  });
+  return getModuleBData();
+}
+
+function createNewIngredient(name, source, isSemi) {
+  const newId = getMaxId(DB_CONFIG.ingredients.name, 'ingredient_id') + 1;
+  insertRow(DB_CONFIG.ingredients.name, {
+    'ingredient_id': newId, 'ingredient_name': name,
+    'purchase_source': source, 'is_semi_product': isSemi, 'erp_inventory_product_code': ''
+  });
+  return { success: true, newId: newId };
+}
+
+function updateIngredientDetails(id, name, source, isSemi) {
+  updateRow(DB_CONFIG.ingredients.name, 'ingredient_id', id, {
+    'ingredient_name': name,
+    'purchase_source': source,
+    'is_semi_product': isSemi
+  });
+  return getModuleBData();
+}
+
+function getBomDetail(itemId, type) {
+  const tableName = type === 'product' ? DB_CONFIG.product_bom.name : DB_CONFIG.semi_product_bom.name;
+  const idCol = type === 'product' ? 'product_id' : 'semi_product_id';
+  const bomIdCol = type === 'product' ? 'product_bom_id' : 'semi_product_bom_id';
+  
+  const allBom = getTableData(tableName);
+  const ingredients = getTableData(DB_CONFIG.ingredients.name);
+  const units = getTableData(DB_CONFIG.units.name);
+  
+  const bomRows = allBom.filter(b => String(b[idCol]) === String(itemId));
+  const enrichedBom = bomRows.map(b => {
+    const ing = ingredients.find(i => String(i.ingredient_id) === String(b.ingredient_id));
+    const u = units.find(unit => String(unit.unit_id) === String(b.unit_id));
+    return {
+      ...b,
+      bom_id: b[bomIdCol],  
+      ingredient_name: ing ? ing.ingredient_name : 'Unknown',
+      unit_name: u ? u.unit_name : 'Unknown'
+    };
+  });
+  return { bom: enrichedBom, ingredients, units };
+}
+
+function addBomItem(itemId, type, ingredientId, quantity, unitId) {
+  const tableName = type === 'product' ? DB_CONFIG.product_bom.name : DB_CONFIG.semi_product_bom.name;
+  const pkCol = type === 'product' ? 'product_bom_id' : 'semi_product_bom_id';
+  const fkCol = type === 'product' ? 'product_id' : 'semi_product_id';
+  
+  const newId = getMaxId(tableName, pkCol) + 1;
+  let row = {};
+  row[pkCol] = newId; row[fkCol] = itemId; row['ingredient_id'] = ingredientId;
+  row['quantity'] = quantity; row['unit_id'] = unitId;
+  insertRow(tableName, row);
+  return getBomDetail(itemId, type);
+}
+
+function removeBomItem(bomId, itemId, type) {
+  const tableName = type === 'product' ? DB_CONFIG.product_bom.name : DB_CONFIG.semi_product_bom.name;
+  const pkCol = type === 'product' ? 'product_bom_id' : 'semi_product_bom_id';
+  deleteRowById(tableName, pkCol, bomId);
+  return getBomDetail(itemId, type);
+}
+
+/* =========================================
+   Module C: ERP 庫存對應
+   ========================================= */
+function getModuleCData() {
+  const ingredients = getTableData(DB_CONFIG.ingredients.name);
+  const units = getTableData(DB_CONFIG.units.name);
+  return { ingredients: ingredients, units: units };
+}
+
+function searchErpInventory(query) {
+  const erpData = getTableData(DB_CONFIG.erp_inventory.name);
+  const units = getTableData(DB_CONFIG.units.name);
+  const conversions = getTableData(DB_CONFIG.unit_conversions.name);
+
+  if (!query) return [];
+  const lowerQ = query.toLowerCase();
+  
+  return erpData.filter(e => 
+    (e.erp_inventory_name && String(e.erp_inventory_name).toLowerCase().includes(lowerQ)) || 
+    (e.product_code && String(e.product_code).toLowerCase().includes(lowerQ))
+  ).slice(0, 20).map(e => {
+    const u = units.find(unit => String(unit.unit_id) === String(e.inventory_unit_id));
+    const existConv = conversions.find(c => String(c.erp_inventory_id) === String(e.erp_inventory_id));
+    return { 
+      ...e, 
+      unit_name: u ? u.unit_name : 'Unknown',
+      existing_conversion: existConv || null 
+    };
+  });
+}
+
+function linkIngredientComplex(form) {
+  updateRow(DB_CONFIG.ingredients.name, 'ingredient_id', form.ingredientId, {
+    'erp_inventory_product_code': form.erpProductCode
+  });
+  
+  const erpData = getTableData(DB_CONFIG.erp_inventory.name).find(e => e.product_code == form.erpProductCode);
+  const erpInvId = erpData ? erpData.erp_inventory_id : 0;
+  
+  const conversions = getTableData(DB_CONFIG.unit_conversions.name);
+  const existConv = conversions.find(c => String(c.erp_inventory_id) === String(erpInvId));
+  
+  if (existConv) {
+     updateRow(DB_CONFIG.unit_conversions.name, 'erp_inventory_id', erpInvId, {
+        'warehouse_out_unit_id': form.whOutUnit,
+        'warehouse_out_quantity': form.whOutQty,
+        'warehouse_out_base_unit_id': form.erpInvUnitId,
+        'warehouse_in_unit_id': form.whInUnit,
+        'warehouse_in_quantity': form.whInQty,
+        'warehouse_in_base_unit_id': form.whInBaseUnit
+     });
+  } else {
+     const newId = getMaxId(DB_CONFIG.unit_conversions.name, 'id') + 1;
+     insertRow(DB_CONFIG.unit_conversions.name, {
+        'id': newId, 'erp_inventory_id': erpInvId,
+        'warehouse_out_unit_id': form.whOutUnit,
+        'warehouse_out_quantity': form.whOutQty,
+        'warehouse_out_base_unit_id': form.erpInvUnitId,
+        'warehouse_in_unit_id': form.whInUnit,
+        'warehouse_in_quantity': form.whInQty,
+        'warehouse_in_base_unit_id': form.whInBaseUnit
+     });
+  }
+  return { success: true };
 }
