@@ -75,10 +75,13 @@
   <span><i class="fas fa-carrot"></i> Tomato BOM 表資料工具</span>
 </div>
 
+<div id="toast" class="w3-panel w3-pale-green w3-border" style="display:none; position:fixed; top:70px; right:20px; z-index:99999; max-width:320px; pointer-events:none;"></div>
+
 <div class="tab-bar">
   <div class="tab-item active" onclick="switchTab('ModuleA', event)">POS名稱對應</div>
   <div class="tab-item" onclick="switchTab('ModuleB', event)">產品與食材資料</div>
   <div class="tab-item" onclick="switchTab('ModuleC', event)">ERP庫存對應</div>
+  <div class="tab-item" onclick="switchTab('ModuleD', event)">門市對應</div>
 </div>
 
 <div class="content-area">
@@ -280,6 +283,91 @@
       <button class="w3-button w3-deep-orange w3-block w3-margin-top w3-round" onclick="saveInventoryLink()">確認連結並儲存</button>
     </div>
   </div>
+  <div id="ModuleD" class="tab-content" style="display:none">
+    <div class="w3-row">
+      <div class="w3-col m5 w3-padding-small">
+        <div class="w3-row-padding" style="margin:0 -8px">
+           <div class="w3-col s12">
+              <input type="text" id="storeFilter" placeholder="搜尋 ERP 門市名稱..." onkeyup="filterStores()">
+           </div>
+           <div class="w3-col s6">
+              <select id="storeStatusFilter" onchange="filterStores()">
+                <option value="active" selected>有效 (Active)</option>
+                <option value="inactive">無效 (Inactive)</option>
+                <option value="all">全部狀態</option>
+              </select>
+           </div>
+           <div class="w3-col s6">
+              <select id="storeLinkFilter" onchange="filterStores()">
+                <option value="all" selected>全部連結狀態</option>
+                <option value="linked">已連結 POS</option>
+                <option value="unlinked">未連結 POS</option>
+              </select>
+           </div>
+        </div>
+        
+        <div id="storeListContainer" class="card-box" style="min-height: 200px; padding:0;">
+          <div class="w3-center w3-padding w3-text-grey">載入中...</div>
+        </div>
+      </div>
+      
+      <div class="w3-col m7 w3-padding-small">
+        <div class="card-box" id="storeDetailArea" style="display:none;">
+          <div class="section-title">門市詳細資料與綁定</div>
+          <input type="hidden" id="selectedStoreId">
+          
+          <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
+            <h4 id="selectedErpName" style="margin:0; font-size:1.1em"></h4>
+            <span id="selectedStoreType" class="w3-tag w3-blue w3-small w3-round" style="margin-top:5px;"></span>
+          </div>
+          
+          <label>綁定 POS 門市名稱:</label>
+          <div style="display:flex; gap:5px;">
+             <input type="text" id="posStoreNameInput" placeholder="輸入 POS 門市名稱">
+             <button class="w3-button w3-light-grey w3-border w3-round" onclick="clearPosStoreName()" title="清除"><i class="fas fa-times"></i></button>
+          </div>
+          <small class="w3-text-grey">請輸入對應的 POS 系統門市名稱</small>
+
+          <hr>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s6">
+              <label>國家:</label><input type="text" id="storeCountry">
+            </div>
+            <div class="w3-col s6">
+              <label>城市:</label><input type="text" id="storeCity">
+            </div>
+            <div class="w3-col s6">
+              <label>區域:</label><input type="text" id="storeDistrict">
+            </div>
+            <div class="w3-col s6">
+              <label>狀態:</label>
+              <select id="storeStatusSelect">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <label>中文地址:</label><input type="text" id="storeAddrTw">
+          <label>英文地址:</label><input type="text" id="storeAddrEn">
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+             <div class="w3-col s6"><label>緯度:</label><input type="text" id="storeLat"></div>
+             <div class="w3-col s6"><label>經度:</label><input type="text" id="storeLng"></div>
+          </div>
+          
+          <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveStoreDetails()">
+            <i class="fas fa-save"></i> 儲存變更
+          </button>
+          <div id="storeSaveMsg" class="w3-small w3-text-green" style="display:none; margin-top:8px;"></div>
+        </div>
+        <div id="storePlaceholder" class="w3-center w3-text-grey w3-padding-32">
+          <i class="fas fa-arrow-left"></i> 請從左側選擇一個門市
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="modalNewProduct" class="modal">
@@ -333,6 +421,7 @@
     ingredients: [],
     units: [],
     categories: [],
+    stores: [],
     currentBomType: 'product',
     currentBomItemId: null,
     selectedErpUnitId: null,
@@ -340,6 +429,17 @@
   };
 
   function showLoading(b) { document.getElementById('loading').style.display = b?'flex':'none'; }
+
+  function showToast_(msg, type) {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    const t = type || 'success';
+    el.className = 'w3-panel w3-border ' + (t === 'error' ? 'w3-pale-red' : (t === 'warn' ? 'w3-pale-yellow' : 'w3-pale-green'));
+    el.textContent = msg || '';
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
+  }
   
   function switchTab(id, event) {
     document.querySelectorAll('.tab-content').forEach(d=>d.style.display='none');
@@ -350,6 +450,7 @@
     if(id==='ModuleA') loadModuleA();
     if(id==='ModuleB') loadModuleB();
     if(id==='ModuleC') loadModuleC();
+    if(id==='ModuleD') loadModuleD();
   }
   
   function toggleSubTab(id, btn) {
@@ -443,7 +544,7 @@
     let prodIds = [];
     for(let i=0; i<5; i++) { let val = document.getElementById(`mapProd_${i}`).value; if(val) prodIds.push(val); }
     showLoading(true);
-    google.script.run.withSuccessHandler(() => { alert('儲存成功'); loadModuleA(); }).savePosMapping(posId, prodIds);
+    google.script.run.withSuccessHandler(() => { showToast_('已儲存'); loadModuleA(); }).savePosMapping(posId, prodIds);
   }
 
   // ================= MODULE B =================
@@ -504,7 +605,7 @@
   function saveIngDetailData() {
     showLoading(true);
     google.script.run.withSuccessHandler(data => {
-      G.ingredients = data.ingredients; G.semiProducts = data.semiProducts; updateBSelects(); renderIngList(); closeModal('modalEditIngDetail'); showLoading(false); alert("修改成功");
+      G.ingredients = data.ingredients; G.semiProducts = data.semiProducts; updateBSelects(); renderIngList(); closeModal('modalEditIngDetail'); showLoading(false); showToast_('已儲存');
     }).updateIngredientDetails(document.getElementById('editIngId').value, document.getElementById('editIngName').value, document.getElementById('editIngSource').value, document.getElementById('editIngIsSemi').value);
   }
   
@@ -518,7 +619,7 @@
   
   function openEditProductModal() {
     const prodId = document.getElementById('productSelectB').value;
-    if(!prodId) return alert('請先選擇一個產品');
+    if(!prodId) { showToast_('請先選擇一個產品', 'warn'); return; }
     const prod = G.products.find(p => String(p.product_id) === prodId);
     
     document.getElementById('prodModalTitle').innerText = '編輯產品'; 
@@ -533,7 +634,7 @@
     const id = document.getElementById('editProdId').value;
     const name = document.getElementById('newProdName').value;
     const cat = document.getElementById('newProdCat').value;
-    if(!name) return alert('請輸入名稱');
+    if(!name) { showToast_('請輸入名稱', 'warn'); return; }
     
     showLoading(true);
     if(id) {
@@ -556,7 +657,7 @@
   }
   function createCategory() {
     const name = document.getElementById('newCatName').value;
-    if(!name) return alert("名稱不可為空");
+    if(!name) { showToast_('名稱不可為空', 'warn'); return; }
     showLoading(true);
     google.script.run.withSuccessHandler(data => {
       G.categories = data.categories;
@@ -565,15 +666,15 @@
       data.categories.forEach(c => cSel.add(new Option(c.category_name, c.category_id)));
       closeModal('modalNewCategory');
       showLoading(false);
-      alert("類別建立成功");
+      showToast_('已建立');
     }).createProductCategory(name);
   }
 
   function createIngredient() {
      const name = document.getElementById('newIngName').value;
-     if(!name) return alert("名稱不可為空");
+      if(!name) { showToast_('名稱不可為空', 'warn'); return; }
      showLoading(true);
-     google.script.run.withSuccessHandler(()=> {alert("建立成功"); document.getElementById('newIngName').value=''; loadModuleB();}).createNewIngredient(name, document.getElementById('newIngSource').value, document.getElementById('newIngIsSemi').value);
+      google.script.run.withSuccessHandler(()=> {showToast_('已建立'); document.getElementById('newIngName').value=''; loadModuleB();}).createNewIngredient(name, document.getElementById('newIngSource').value, document.getElementById('newIngIsSemi').value);
   }
 
   // --- Units Management ---
@@ -589,7 +690,7 @@
   }
   function addUnit() {
     const name = document.getElementById('newUnitNameInput').value;
-    if(!name) return alert("單位名稱不可為空");
+    if(!name) { showToast_('單位名稱不可為空', 'warn'); return; }
     showLoading(true);
     google.script.run.withSuccessHandler(data => {
       G.units = data.units;
@@ -661,7 +762,7 @@
     const ingId = document.getElementById('bomIngSelect').value;
     const qty = document.getElementById('bomQty').value;
     const unitId = document.getElementById('bomUnit').value;
-    if(!ingId || !qty) return alert('請填寫完整');
+    if(!ingId || !qty) { showToast_('請填寫完整', 'warn'); return; }
     showLoading(true);
     google.script.run.withSuccessHandler(renderBom).addBomItem(G.currentBomItemId, G.currentBomType, ingId, qty, unitId);
   }
@@ -769,7 +870,7 @@
   function saveInventoryLink() {
     const ingId = document.getElementById('ingSelectC').value; 
     const erpCode = document.getElementById('erpResultC').value;
-    if(!ingId || !erpCode) return alert('請選擇食材與 ERP 品項');
+    if(!ingId || !erpCode) { showToast_('請選擇食材與 ERP 品項', 'warn'); return; }
     const form = {
       ingredientId: ingId,
       erpProductCode: erpCode,
@@ -780,12 +881,140 @@
       whInQty: document.getElementById('whInQty').value,
       whInBaseUnit: document.getElementById('whInBaseUnit').value
     };
-    if(!form.whOutQty || !form.whInQty) return alert('請輸入換算數量');
+    if(!form.whOutQty || !form.whInQty) { showToast_('請輸入換算數量', 'warn'); return; }
     showLoading(true);
     google.script.run.withSuccessHandler(() => {
-      alert('連結並建立換算成功！');
+      showToast_('已儲存');
       loadModuleC();
     }).linkIngredientComplex(form);
+  }
+
+  // ================= MODULE D =================
+  function loadModuleD() {
+    showLoading(true);
+    google.script.run.withSuccessHandler(items => {
+      G.stores = items || [];
+      renderStoreList();
+      showLoading(false);
+    }).getModuleDData();
+  }
+
+  function filterStores() { renderStoreList(); }
+
+  function renderStoreList() {
+    const container = document.getElementById('storeListContainer');
+    if (!container) return;
+
+    const txt = (document.getElementById('storeFilter').value || '').toLowerCase();
+    const statusFilter = document.getElementById('storeStatusFilter').value;
+    const linkFilter = document.getElementById('storeLinkFilter').value;
+
+    container.innerHTML = '';
+    if(!G.stores || G.stores.length === 0) {
+      container.innerHTML = '<div class="w3-center">No Data</div>';
+      return;
+    }
+
+    const filtered = G.stores.filter(s => {
+      const matchTxt = String(s.erp_customer_name || '').toLowerCase().includes(txt);
+      const matchStatus = statusFilter === 'all' || String(s.store_status || 'active') === statusFilter;
+      const isLinked = !!s.pos_store_name;
+      const matchLink = linkFilter === 'all' || (linkFilter === 'linked' ? isLinked : !isLinked);
+      return matchTxt && matchStatus && matchLink;
+    });
+
+    filtered.forEach(s => {
+      const status = String(s.store_status || 'active');
+      const statusClass = status === 'active' ? 'status-valid' : 'status-invalid';
+      const isLinked = !!s.pos_store_name;
+      const storeId = String(s.id || '').trim();
+
+      let row = document.createElement('div');
+      row.className = 'pos-item-row';
+
+      let left = document.createElement('div');
+      left.style.flex = '1';
+      left.style.cursor = 'pointer';
+      left.innerHTML = `
+        <div style="font-weight:bold">${s.erp_customer_name || ''}</div>
+        <div class="pos-details">${s.pos_store_name ? s.pos_store_name : '<span class="w3-text-grey">(未綁定 POS)</span>'}</div>
+      `;
+      left.addEventListener('click', () => selectStore(storeId));
+
+      let right = document.createElement('div');
+      right.style.textAlign = 'right';
+      right.innerHTML = `
+        <span class="status-badge ${statusClass}">${status}</span>
+        <div>${isLinked ? '<i class="fas fa-link w3-text-green"></i>' : '<i class="fas fa-exclamation-circle w3-text-red"></i>'}</div>
+      `;
+
+      row.appendChild(left);
+      row.appendChild(right);
+      container.appendChild(row);
+    });
+  }
+
+  function selectStore(id) {
+    const s = (G.stores || []).find(x => String(x.id) === String(id));
+    if(!s) return;
+
+    document.getElementById('storeDetailArea').style.display='block';
+    document.getElementById('storePlaceholder').style.display='none';
+
+    document.getElementById('selectedStoreId').value = s.id;
+    document.getElementById('selectedErpName').innerText = s.erp_customer_name || '';
+    document.getElementById('selectedStoreType').innerText = s.store_type || '';
+
+    document.getElementById('posStoreNameInput').value = s.pos_store_name || '';
+    document.getElementById('storeCountry').value = s.country || '台灣';
+    document.getElementById('storeCity').value = s.city || '';
+    document.getElementById('storeDistrict').value = s.district || '';
+    document.getElementById('storeStatusSelect').value = s.store_status || 'active';
+    document.getElementById('storeAddrTw').value = s.address_zhtw || '';
+    document.getElementById('storeAddrEn').value = s.address_en || '';
+    document.getElementById('storeLat').value = (s.latitude === null || s.latitude === undefined) ? '' : String(s.latitude);
+    document.getElementById('storeLng').value = (s.longitude === null || s.longitude === undefined) ? '' : String(s.longitude);
+  }
+
+  function clearPosStoreName() {
+    const el = document.getElementById('posStoreNameInput');
+    if (el) el.value = '';
+  }
+
+  function saveStoreDetails() {
+    const id = document.getElementById('selectedStoreId').value;
+    if(!id) return;
+
+    const form = {
+      id: id,
+      pos_store_name: document.getElementById('posStoreNameInput').value || null,
+      country: document.getElementById('storeCountry').value || null,
+      city: document.getElementById('storeCity').value || null,
+      district: document.getElementById('storeDistrict').value || null,
+      store_status: document.getElementById('storeStatusSelect').value || 'active',
+      address_zhtw: document.getElementById('storeAddrTw').value || null,
+      address_en: document.getElementById('storeAddrEn').value || null,
+      latitude: document.getElementById('storeLat').value || null,
+      longitude: document.getElementById('storeLng').value || null
+    };
+
+    showLoading(true);
+    google.script.run.withSuccessHandler(items => {
+      G.stores = items || [];
+      renderStoreList();
+      selectStore(id);
+      showLoading(false);
+      showStoreSaveMsg_('已儲存');
+    }).updateStoreDetails(form);
+  }
+
+  function showStoreSaveMsg_(msg) {
+    const el = document.getElementById('storeSaveMsg');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
   }
   
   window.onload = function() { document.querySelectorAll('.tab-item')[0].classList.add('active'); document.getElementById('ModuleA').style.display='block'; loadModuleA(); };

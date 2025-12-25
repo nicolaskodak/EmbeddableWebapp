@@ -260,11 +260,51 @@ function getStoreSheet_() {
   
   // 確保有標題列
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
-    sheet.getRange(1, 1, 1, 11).setFontWeight('bold');
+    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
+    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
   }
+
+  ensureStoreSheetSchema_(sheet);
   
   return sheet;
+}
+
+function ensureStoreSheetSchema_(sheet) {
+  if (!sheet) return;
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) {
+    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
+    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
+    return;
+  }
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
+    return String(h || '').trim();
+  });
+
+  var idColIndex = headers.indexOf('id');
+  if (idColIndex === -1) {
+    idColIndex = headers.length;
+    sheet.insertColumnAfter(lastCol);
+    sheet.getRange(1, idColIndex + 1).setValue('id').setFontWeight('bold');
+    headers.push('id');
+  }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var idRange = sheet.getRange(2, idColIndex + 1, lastRow - 1, 1);
+  var idValues = idRange.getValues();
+  var changed = false;
+  for (var i = 0; i < idValues.length; i++) {
+    var v = String(idValues[i][0] || '').trim();
+    if (!v) {
+      idValues[i][0] = Utilities.getUuid();
+      changed = true;
+    }
+  }
+  if (changed) idRange.setValues(idValues);
 }
 
 
@@ -592,3 +632,179 @@ function linkIngredientComplex(form) {
   return { success: true };
 }
 
+
+/* =========================================
+   Module D: 門市對應
+   ========================================= */
+function getModuleDData() {
+  try {
+    var sheet = getStoreSheet_();
+    ensureStoreSheetSchema_(sheet);
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol === 0) return [];
+
+    var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var headers = values[0].map(function (h) { return String(h || '').trim(); });
+
+    var items = [];
+    for (var r = 1; r < values.length; r++) {
+      var row = values[r];
+      var obj = {};
+      for (var c = 0; c < headers.length; c++) {
+        var key = headers[c];
+        if (!key) continue;
+        obj[key] = row[c];
+      }
+
+      // 前端依賴 id
+      obj.id = String(obj.id || '').trim();
+      if (!obj.id) {
+        obj.id = Utilities.getUuid();
+      }
+
+      // 一些預設
+      if (!obj.store_status) obj.store_status = 'active';
+      if (!obj.country) obj.country = '台灣';
+
+      items.push(obj);
+    }
+
+    return items;
+  } catch (e) {
+    Logger.log('Exception in getModuleDData: ' + e);
+    return [];
+  }
+}
+
+function updateStoreDetails(form) {
+  try {
+    var sheet = getStoreSheet_();
+    ensureStoreSheetSchema_(sheet);
+
+    form = form || {};
+    var payload = {
+      id: form.id,
+      erp_customer_name: form.erp_customer_name,
+      pos_store_name: form.pos_store_name,
+      address_zhtw: form.address_zhtw,
+      address_en: form.address_en,
+      country: form.country,
+      city: form.city,
+      district: form.district,
+      latitude: form.latitude,
+      longitude: form.longitude,
+      store_status: form.store_status,
+      store_type: form.store_type
+    };
+
+    var result = upsertStoreRow_(sheet, payload);
+    Logger.log('Store upsert: ' + JSON.stringify(result));
+    return getModuleDData();
+  } catch (e) {
+    Logger.log('Exception in updateStoreDetails: ' + e);
+    throw e;
+  }
+}
+
+function deleteStore(id) {
+  var sheet = getStoreSheet_();
+  ensureStoreSheetSchema_(sheet);
+  return deleteStoreRowById_(sheet, id);
+}
+
+function getStoreHeaders_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return [];
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
+    return String(h || '').trim();
+  });
+}
+
+function getHeaderIndexMap_(headers) {
+  var map = {};
+  headers.forEach(function (h, idx) {
+    if (h) map[h] = idx;
+  });
+  return map;
+}
+
+function normalizeStoreRow_(obj) {
+  if (!obj) obj = {};
+  if (obj.store_status === undefined || obj.store_status === null || obj.store_status === '') obj.store_status = 'active';
+  if (obj.country === undefined || obj.country === null || obj.country === '') obj.country = '台灣';
+  return obj;
+}
+
+function upsertStoreRow_(sheet, obj) {
+  obj = normalizeStoreRow_(obj);
+  var headers = getStoreHeaders_(sheet);
+  var idx = getHeaderIndexMap_(headers);
+  var idCol = idx.id;
+  if (idCol === undefined) throw new Error('stores sheet 缺少 id 欄位');
+
+  var id = String(obj.id || '').trim();
+  if (!id) {
+    id = Utilities.getUuid();
+    obj.id = id;
+  }
+
+  var lastRow = sheet.getLastRow();
+  var targetRow = -1;
+  if (lastRow >= 2) {
+    var idValues = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < idValues.length; i++) {
+      if (String(idValues[i][0] || '').trim() === id) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  // 僅更新既有欄位；忽略未知欄位
+  function setCell(rowNum, key, value) {
+    var c = idx[key];
+    if (c === undefined) return;
+    sheet.getRange(rowNum, c + 1).setValue(value === undefined ? '' : value);
+  }
+
+  if (targetRow === -1) {
+    // 新增
+    var newRow = headers.map(function (h) {
+      return obj[h] === undefined ? '' : obj[h];
+    });
+    sheet.appendRow(newRow);
+    return { ok: true, op: 'insert', id: id };
+  }
+
+  // 更新
+  Object.keys(obj).forEach(function (k) {
+    // 只有明確提供的欄位才覆寫；避免前端沒送的欄位被清空
+    if (obj[k] === undefined) return;
+    setCell(targetRow, k, obj[k]);
+  });
+  return { ok: true, op: 'update', id: id };
+}
+
+function deleteStoreRowById_(sheet, id) {
+  var headers = getStoreHeaders_(sheet);
+  var idx = getHeaderIndexMap_(headers);
+  var idCol = idx.id;
+  if (idCol === undefined) throw new Error('stores sheet 缺少 id 欄位');
+
+  var targetId = String(id || '').trim();
+  if (!targetId) return { ok: false, error: 'missing id' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true, deleted: 0 };
+
+  var idValues = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < idValues.length; i++) {
+    if (String(idValues[i][0] || '').trim() === targetId) {
+      sheet.deleteRow(i + 2);
+      return { ok: true, deleted: 1, id: targetId };
+    }
+  }
+  return { ok: true, deleted: 0, id: targetId };
+}

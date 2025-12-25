@@ -5,17 +5,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 type UpsertPayload = {
   op: "upsert";
   event_id: string;
-  row: {
-    name: string;
-    qty: number;
-    updated_at?: string;
-  };
+  table?: string; // default to "items" if missing
+  row: Record<string, any>; // generic row data
+  conflict_columns?: string[]; // optional, for upsert conflict resolution
 };
 
 type DeletePayload = {
   op: "delete";
   event_id: string;
-  name: string;
+  table?: string; // default to "items" if missing
+  filter: Record<string, any>; // e.g. { name: "foo" } or { id: 123 }
   deleted_at?: string;
 };
 
@@ -33,26 +32,44 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // ---- GET: getItem / listItems ----
+  // ---- GET: getItem / listItems (Generic) ----
   if (req.method === "GET") {
     const url = new URL(req.url);
-
-    const name = url.searchParams.get("name"); // optional
+    const table = url.searchParams.get("table") || "items"; // default table
+    
+    // Common params
     const includeDeleted = url.searchParams.get("include_deleted") === "true";
-
-    // default list limit
     const limitRaw = url.searchParams.get("limit") ?? "50";
     const limit = Math.max(1, Math.min(200, Number(limitRaw) || 50));
 
-    // get single item by name
-    if (name) {
+    // Filter by specific column (generic way: ?col=name&val=foo)
+    const filterCol = url.searchParams.get("col");
+    const filterVal = url.searchParams.get("val");
+
+    // get single item by filter
+    if (filterCol && filterVal) {
       let q = supabase
-        .from("items")
-        .select("id,name,qty,updated_at,deleted_at")
-        .eq("name", name)
+        .from(table)
+        .select("*")
+        .eq(filterCol, filterVal)
         .limit(1);
 
-      if (!includeDeleted) q = q.is("deleted_at", null);
+      // Only apply deleted_at check if the table has that column (assuming standard schema)
+      // For simplicity, we assume tables might have deleted_at. If not, this might error or be ignored.
+      // A safer way is to check table metadata, but for now we assume convention.
+      if (!includeDeleted) {
+        // We try to filter deleted_at only if we think it exists. 
+        // Or we just try it. If column doesn't exist, Supabase/Postgres might throw error.
+        // For "stores" table, we don't have deleted_at in the SQL provided, so we should skip this 
+        // or add deleted_at to stores table. 
+        // Based on user request, stores table has store_status, maybe use that?
+        // For generic approach, let's assume standard soft delete column "deleted_at" if it exists.
+        // If the table doesn't have deleted_at, we might need to skip this filter or handle error.
+        // For now, let's apply it only for "items" or tables known to have it.
+        if (table === "items") {
+           q = q.is("deleted_at", null);
+        }
+      }
 
       const { data, error } = await q.maybeSingle();
 
@@ -79,12 +96,18 @@ serve(async (req) => {
 
     // list items
     let q = supabase
-      .from("items")
-      .select("id,name,qty,updated_at,deleted_at")
-      .order("updated_at", { ascending: false })
+      .from(table)
+      .select("*")
       .limit(limit);
+      
+    // Try to order by updated_at if possible, else just default order
+    // We can't easily know if updated_at exists for all tables without metadata check.
+    // But stores and items both have updated_at.
+    q = q.order("updated_at", { ascending: false });
 
-    if (!includeDeleted) q = q.is("deleted_at", null);
+    if (!includeDeleted && table === "items") {
+       q = q.is("deleted_at", null);
+    }
 
     const { data, error } = await q;
 
@@ -101,7 +124,7 @@ serve(async (req) => {
     });
   }
 
-  // ---- POST: upsert/delete (existing logic) ----
+  // ---- POST: upsert/delete (Generic) ----
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
@@ -139,29 +162,38 @@ serve(async (req) => {
   }
 
   // 6) Apply operation
+  const table = payload.table || "items"; // default to items for backward compatibility
+
   if (payload.op === "upsert") {
     const row = payload.row;
-    if (!row?.name || typeof row.name !== "string") {
-      return new Response("Invalid row.name", { status: 400 });
-    }
-    if (typeof row.qty !== "number" || Number.isNaN(row.qty)) {
-      return new Response("Invalid row.qty", { status: 400 });
+    if (!row) {
+      return new Response("Missing row data", { status: 400 });
     }
 
-    const updatedAt = row.updated_at ?? new Date().toISOString();
+    // Auto-fill updated_at if missing
+    if (!row.updated_at) {
+      row.updated_at = new Date().toISOString();
+    }
+    
+    // For items table, handle deleted_at revival logic
+    if (table === "items") {
+      row.deleted_at = null;
+    }
 
-    // Upsert by name (requires UNIQUE index on name)
+    // Upsert
+    // We need to know the conflict columns for onConflict.
+    // For 'items', it's 'name'. For 'stores', it might be 'id' or 'erp_customer_name'.
+    // We let the client specify it, or default based on table.
+    let conflict = payload.conflict_columns;
+    if (!conflict) {
+      if (table === "items") conflict = ["name"];
+      else if (table === "stores") conflict = ["id"]; // or erp_customer_name? usually ID for updates
+      else conflict = ["id"]; // safe default guess
+    }
+    
     const { error: upsertErr } = await supabase
-      .from("items")
-      .upsert(
-        {
-          name: row.name,
-          qty: row.qty,
-          updated_at: updatedAt,
-          deleted_at: null, // revive if previously deleted
-        },
-        { onConflict: "name" },
-      );
+      .from(table)
+      .upsert(row, { onConflict: conflict.join(",") });
 
     if (upsertErr) {
       return new Response(JSON.stringify(upsertErr), {
@@ -170,23 +202,47 @@ serve(async (req) => {
       });
     }
   } else if (payload.op === "delete") {
-    if (!payload.name || typeof payload.name !== "string") {
-      return new Response("Invalid name", { status: 400 });
+    const filter = payload.filter;
+    if (!filter || Object.keys(filter).length === 0) {
+       // Backward compatibility for "items" table using "name"
+       if (table === "items" && (payload as any).name) {
+         // convert old payload format to filter
+       } else {
+         return new Response("Missing filter for delete", { status: 400 });
+       }
     }
 
-    const deletedAt = payload.deleted_at ?? new Date().toISOString();
+    // Handle backward compatibility for items table delete payload
+    let finalFilter = filter;
+    if (table === "items" && (payload as any).name && !finalFilter) {
+      finalFilter = { name: (payload as any).name };
+    }
 
-    // soft delete
-    const { error: delErr } = await supabase
-      .from("items")
-      .update({ deleted_at: deletedAt, updated_at: deletedAt })
-      .eq("name", payload.name);
-
-    if (delErr) {
-      return new Response(JSON.stringify(delErr), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+    // Check if table supports soft delete
+    // 'items' has deleted_at. 'stores' does not (based on SQL).
+    // If stores table needs soft delete, we should update SQL or use store_status='inactive'.
+    // For now, let's assume hard delete for stores, soft delete for items.
+    
+    if (table === "items") {
+      const deletedAt = payload.deleted_at ?? new Date().toISOString();
+      const { error: delErr } = await supabase
+        .from(table)
+        .update({ deleted_at: deletedAt, updated_at: deletedAt })
+        .match(finalFilter);
+        
+      if (delErr) {
+        return new Response(JSON.stringify(delErr), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+    } else {
+      // Hard delete for other tables (like stores)
+      const { error: delErr } = await supabase
+        .from(table)
+        .delete()
+        .match(finalFilter);
+        
+      if (delErr) {
+        return new Response(JSON.stringify(delErr), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
     }
   } else {
     return new Response("Unknown op", { status: 400 });
