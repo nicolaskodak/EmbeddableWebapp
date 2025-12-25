@@ -1,7 +1,6 @@
-/**
- * 設定 Google Sheet ID
- * 請在 Apps Script 專案屬性中設定 SHEET_ID
- */
+/* =========================================
+   Module: Users 使用者管理
+   ========================================= */
 function getSheet_() {
   var sheetId = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
   if (!sheetId) {
@@ -19,7 +18,6 @@ function getSheet_() {
   
   return sheet;
 }
-
 
 function doGet(e) {
   var action = e.parameter.action || '';
@@ -248,8 +246,31 @@ function verifyToken_(token, allowedOrigins) {
   return { userId: userId, ts: ts, origin: origin };
 }
 
+/* =========================================
+   Module: Store 門市對應關係管理
+   ========================================= */
+function getStoreSheet_() {
+  var sheetId = PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID');
+  if (!sheetId) {
+    throw new Error('請在專案屬性中設定 STORE_SHEET_ID');
+  }
+  
+  var ss = SpreadsheetApp.openById(sheetId);
+  var sheet = ss.getSheetByName('data') || ss.insertSheet('data');
+  
+  // 確保有標題列
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
+    sheet.getRange(1, 1, 1, 11).setFontWeight('bold');
+  }
+  
+  return sheet;
+}
 
-/* 請填入您的 Google Sheet ID */
+
+/* 
+-- pos, bom, erp
+ */
 const SHEET_ID = "1RLrJPHJ1RpUbTIQl1V4m0Wgh7j2IXo0-eRWQPmeALSk"; 
 
 /* =========================================
@@ -268,8 +289,6 @@ const DB_CONFIG = {
   unit_conversions: { name: 'unit_conversions', cols: ['id', 'erp_inventory_id', 'warehouse_in_unit_id', 'warehouse_in_quantity', 'warehouse_in_base_unit_id', 'warehouse_out_unit_id', 'warehouse_out_quantity', 'warehouse_out_base_unit_id'] }
 };
 
-
-// --- 通用 DB Helper ---
 function getSpreadsheet() {
   if (SHEET_ID && SHEET_ID.length > 20 && SHEET_ID !== "請將此處替換為您的_Google_Sheet_ID") {
     return SpreadsheetApp.openById(SHEET_ID);
@@ -572,3 +591,4 @@ function linkIngredientComplex(form) {
   }
   return { success: true };
 }
+

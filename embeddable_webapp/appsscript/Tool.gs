@@ -27,7 +27,6 @@ function syncUpsertItem() {
 
 function syncDeleteItem() {
   const url = "https://mwgrrymqzbefqgstefoa.supabase.co/functions/v1/items-sync";
-  // const syncKey = PropertiesService.getScriptProperties().getProperty("SYNC_KEY");
   const apiKey = PropertiesService.getScriptProperties().getProperty("API_KEY");
 
   const payload = {
@@ -42,6 +41,23 @@ function syncDeleteItem() {
     contentType: "application/json",
     headers: { "x-sync-key": apiKey, "Authorization": `Bearer ${apiKey}` },
     payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  Logger.log(res.getResponseCode());
+  Logger.log(res.getContentText());
+}
+
+function getItem() {
+  const baseUrl = "https://mwgrrymqzbefqgstefoa.supabase.co/functions/v1/items-sync";
+  const apiKey = PropertiesService.getScriptProperties().getProperty("API_KEY");
+
+  const name = "apple";
+  const url = `${baseUrl}?name=${encodeURIComponent(name)}`;
+
+  const res = UrlFetchApp.fetch(url, {
+    method: "get",
+    headers: { "x-sync-key": apiKey, "Authorization": `Bearer ${apiKey}`  },
     muteHttpExceptions: true
   });
 

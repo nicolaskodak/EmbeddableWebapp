@@ -1,55 +1,55 @@
 <!DOCTYPE html>
 <html>
-  <head>
-  <base target="_top">
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tomato BOM 表資料工具</title>
-  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-  <style>
-    body { font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; background-color: #f4f6f8; color: #333; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-    
-    .header { background: #d35400; color: white; padding: 15px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; }
-    .tab-bar { display: flex; background: #fff; border-bottom: 1px solid #ddd; flex-shrink: 0; }
-    .tab-item { flex: 1; padding: 12px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; color: #666; transition: 0.2s; user-select: none; }
-    .tab-item:hover { background-color: #f1f1f1; }
-    .tab-item.active { border-bottom-color: #d35400; color: #d35400; background: #fff5e6; }
-    
-    .content-area { padding: 20px; flex-grow: 1; overflow-y: auto; }
-    .card-box { border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 15px; border-radius: 8px; background: #fff; }
-    .section-title { font-size: 1.1em; font-weight: bold; margin-bottom: 10px; border-left: 4px solid #d35400; padding-left: 10px; }
-    
-    select, input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-    button { cursor: pointer; }
-    
-    .pos-item-row { padding: 12px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-    .pos-item-row:hover { background: #f9f9f9; }
-    .pos-details { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
-    
-    .status-badge { font-size: 0.85em; padding: 4px 8px; border-radius: 4px; cursor: pointer; user-select: none; font-weight: bold; display: inline-block; min-width: 40px; text-align: center;}
-    .status-valid { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
-    .status-invalid { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+    <head>
+        <base target="_top">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Tomato BOM 表資料工具</title>
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+        <style>
+          body { font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; background-color: #f4f6f8; color: #333; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+          
+          .header { background: #d35400; color: white; padding: 15px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; }
+          .tab-bar { display: flex; background: #fff; border-bottom: 1px solid #ddd; flex-shrink: 0; }
+          .tab-item { flex: 1; padding: 12px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; color: #666; transition: 0.2s; user-select: none; }
+          .tab-item:hover { background-color: #f1f1f1; }
+          .tab-item.active { border-bottom-color: #d35400; color: #d35400; background: #fff5e6; }
+          
+          .content-area { padding: 20px; flex-grow: 1; overflow-y: auto; }
+          .card-box { border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 15px; border-radius: 8px; background: #fff; }
+          .section-title { font-size: 1.1em; font-weight: bold; margin-bottom: 10px; border-left: 4px solid #d35400; padding-left: 10px; }
+          
+          select, input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+          button { cursor: pointer; }
+          
+          .pos-item-row { padding: 12px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+          .pos-item-row:hover { background: #f9f9f9; }
+          .pos-details { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
+          
+          .status-badge { font-size: 0.85em; padding: 4px 8px; border-radius: 4px; cursor: pointer; user-select: none; font-weight: bold; display: inline-block; min-width: 40px; text-align: center;}
+          .status-valid { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
+          .status-invalid { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
 
-    /* Ingredient List Item */
-    .ing-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
-    .ing-row:hover { background: #f9f9f9; }
-    .ing-tag { padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-right: 5px; }
-    .tag-semi { background: #fff3cd; color: #856404; }
-    .tag-raw { background: #d1ecf1; color: #0c5460; }
-    
-    .conv-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 10px; }
-    .conv-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; position: relative; }
-    .conv-card-header { font-weight: bold; margin-bottom: 8px; display: block; color: #2c3e50; font-size: 0.95em; }
-    .conv-arrow { text-align: center; color: #aaa; font-size: 1.2em; margin: 5px 0; }
-    .conv-row { display: flex; align-items: center; gap: 5px; }
-    .fixed-tag { background: #e2e6ea; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; color: #495057; font-weight: bold;}
-    
-    .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:999; display:none; justify-content:center; align-items:center; flex-direction: column;}
-    .modal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-    .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-  </style>
-  </head>
+          /* Ingredient List Item */
+          .ing-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+          .ing-row:hover { background: #f9f9f9; }
+          .ing-tag { padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-right: 5px; }
+          .tag-semi { background: #fff3cd; color: #856404; }
+          .tag-raw { background: #d1ecf1; color: #0c5460; }
+          
+          .conv-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 10px; }
+          .conv-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; position: relative; }
+          .conv-card-header { font-weight: bold; margin-bottom: 8px; display: block; color: #2c3e50; font-size: 0.95em; }
+          .conv-arrow { text-align: center; color: #aaa; font-size: 1.2em; margin: 5px 0; }
+          .conv-row { display: flex; align-items: center; gap: 5px; }
+          .fixed-tag { background: #e2e6ea; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; color: #495057; font-weight: bold;}
+          
+          .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:999; display:none; justify-content:center; align-items:center; flex-direction: column;}
+          .modal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+          .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        </style>
+    </head>
   <body>
     <h3>歡迎使用 Apps Script Web App</h3>
     <p>外部系統使用者 ID：<?= userId ?></p>
