@@ -459,6 +459,7 @@ function updatePosStatus(posItemId, newStatus) {
 /* =========================================
    Module B: 產品與食材資料
    ========================================= */
+   
 function getModuleBData() {
   const products = getTableData(DB_CONFIG.products.name);
   const categories = getTableData(DB_CONFIG.product_categories.name);
@@ -807,4 +808,140 @@ function deleteStoreRowById_(sheet, id) {
     }
   }
   return { ok: true, deleted: 0, id: targetId };
+}
+
+
+/* =========================================
+   Module E: 庫存細節 (Supabase inventory_details + Sheet erp_inventory)
+   ========================================= */
+
+function callSupabaseEdgeJson_(method, params, payload) {
+  var baseUrl = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
+  var apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+
+  if (!baseUrl || !apiKey) {
+    throw new Error('Missing SUPABASE_URL or API_KEY in Script Properties');
+  }
+
+  var url = baseUrl;
+  if (params) {
+    var queryString = Object.keys(params)
+      .filter(function (k) { return params[k] !== undefined && params[k] !== null; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])); })
+      .join('&');
+    if (queryString) url += '?' + queryString;
+  }
+
+  var options = {
+    method: method,
+    contentType: 'application/json',
+    headers: {
+      'x-sync-key': apiKey,
+      'Authorization': 'Bearer ' + apiKey
+    },
+    muteHttpExceptions: true
+  };
+
+  if (payload) {
+    options.payload = JSON.stringify(payload);
+  }
+
+  var res = UrlFetchApp.fetch(url, options);
+  var code = res.getResponseCode();
+  var text = res.getContentText();
+
+  var json;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (e) {
+    json = { raw: text };
+  }
+
+  if (code < 200 || code >= 300) {
+    throw new Error('Edge Function error ' + code + ': ' + text);
+  }
+
+  return json;
+}
+
+function getModuleEData() {
+  // 1) 來源：Google Sheet 的 erp_inventory（列出所有庫存品項）
+  var erpItems = getTableData(DB_CONFIG.erp_inventory.name) || [];
+  var units = getTableData(DB_CONFIG.units.name) || [];
+  var unitMap = {};
+  units.forEach(function (u) {
+    unitMap[String(u.unit_id)] = u.unit_name;
+  });
+
+  // 2) 來源：Supabase inventory_details（依 item_code = product_code 合併）
+  var detailsResp = callSupabaseEdgeJson_('get', { table: 'inventory_details', limit: 200 }, null);
+  var details = (detailsResp && detailsResp.items) ? detailsResp.items : [];
+  var detailMap = {};
+  details.forEach(function (d) {
+    var code = String(d.item_code || '').trim();
+    if (code) detailMap[code] = d;
+  });
+
+  // 3) 合併回傳給前端（每個品項一列）
+  var merged = erpItems.map(function (e) {
+    var code = String(e.product_code || '').trim();
+    var base = {
+      product_code: e.product_code,
+      erp_inventory_name: e.erp_inventory_name,
+      unit_name: unitMap[String(e.inventory_unit_id)] || ''
+    };
+
+    var det = code ? (detailMap[code] || null) : null;
+    if (!det) {
+      return {
+        item_code: code,
+        item_name: e.erp_inventory_name,
+        unit: unitMap[String(e.inventory_unit_id)] || '',
+        _has_detail: false
+      };
+    }
+
+    // 以 detail 欄位為主（但確保 item_code / item_name 有值）
+    var out = {};
+    Object.keys(det).forEach(function (k) { out[k] = det[k]; });
+    if (!out.item_code) out.item_code = code;
+    if (!out.item_name) out.item_name = e.erp_inventory_name;
+    if (!out.unit) out.unit = unitMap[String(e.inventory_unit_id)] || '';
+    out._has_detail = true;
+    return out;
+  });
+
+  return merged;
+}
+
+function upsertInventoryDetail(form) {
+  form = form || {};
+  var itemCode = String(form.item_code || '').trim();
+  if (!itemCode) throw new Error('missing item_code');
+
+  var row = {
+    item_code: itemCode,
+    category: form.category,
+    rank: form.rank,
+    item_name: form.item_name,
+    unit: form.unit,
+    shelf_life_days: form.shelf_life_days,
+    shelf_life_category: form.shelf_life_category,
+    sales_grade: form.sales_grade,
+    lead_time_days: form.lead_time_days,
+    delivery: form.delivery,
+    max_purchase_param: form.max_purchase_param,
+    safety_stock_param: form.safety_stock_param,
+    inventory_turnover_days: form.inventory_turnover_days
+  };
+
+  callSupabaseEdgeJson_('post', null, {
+    op: 'upsert',
+    event_id: Utilities.getUuid(),
+    table: 'inventory_details',
+    row: row,
+    conflict_columns: ['item_code']
+  });
+
+  return getModuleEData();
 }

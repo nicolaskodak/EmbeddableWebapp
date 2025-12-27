@@ -188,6 +188,7 @@ serve(async (req) => {
     if (!conflict) {
       if (table === "items") conflict = ["name"];
       else if (table === "stores") conflict = ["id"]; // or erp_customer_name? usually ID for updates
+      else if (table === "inventory_details") conflict = ["item_code"];
       else conflict = ["id"]; // safe default guess
     }
     

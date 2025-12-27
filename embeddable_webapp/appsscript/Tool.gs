@@ -142,3 +142,51 @@ function testDeleteStore() {
 function testListStores() {
   fetchRows_("stores", { limit: 5 });
 }
+
+// ==========================================
+// Test Functions: Inventory Details Table
+// ==========================================
+
+
+
+function testUpsertInventoryDetail() {
+  const row = {
+    category: "長效*熱銷",
+    rank: 1,
+    item_code: "A00002",
+    item_name: "◎豬排肉肉肉",
+    shelf_life_days: 365,
+    shelf_life_category: "長效*",
+    sales_grade: "熱銷",
+    lead_time_days: 7,
+    delivery: "W2、5；W5會較多",
+    max_purchase_param: 7,
+    safety_stock_param: 10,
+    inventory_turnover_days: 17.5
+  };
+  return upsertRow_("inventory_details", row, ["item_code"]);
+}
+
+function testUpdateInventoryDetail() {
+  // 同 item_code 會更新（依 ON CONFLICT item_code）
+  upsertInventoryDetail_({
+    item_code: "A00002",
+    delivery: "W2、5；W5會較多（更新測試）",
+    lead_time_days: 7
+  });
+}
+
+function testGetInventoryDetail() {
+  // getInventoryDetailByItemCode_("A00002");
+  return fetchRows_("inventory_details", { col: "item_code", val: "A00002" });
+}
+
+function testListInventoryDetails() {
+  // listInventoryDetails_(20);
+  return fetchRows_("inventory_details", { limit: 20 || 50 });
+}
+
+function testDeleteInventoryDetail() {
+  // deleteInventoryDetailByItemCode_("A00002");
+  return deleteRow_("inventory_details", { item_code: "A00002" });
+}

@@ -82,6 +82,7 @@
   <div class="tab-item" onclick="switchTab('ModuleB', event)">產品與食材資料</div>
   <div class="tab-item" onclick="switchTab('ModuleC', event)">ERP庫存對應</div>
   <div class="tab-item" onclick="switchTab('ModuleD', event)">門市對應</div>
+  <div class="tab-item" onclick="switchTab('ModuleE', event)">庫存細節</div>
 </div>
 
 <div class="content-area">
@@ -368,6 +369,99 @@
       </div>
     </div>
   </div>
+
+  <div id="ModuleE" class="tab-content" style="display:none">
+    <div class="w3-row">
+      <div class="w3-col m5 w3-padding-small">
+        <div class="w3-row-padding" style="margin:0 -8px">
+          <div class="w3-col s12">
+            <input type="text" id="invFilter" placeholder="搜尋 貨品代號 / 貨品名稱..." onkeyup="filterInventoryItems()">
+          </div>
+        </div>
+
+        <div id="invListContainer" class="card-box" style="min-height: 200px; padding:0;">
+          <div class="w3-center w3-padding w3-text-grey">載入中...</div>
+        </div>
+      </div>
+
+      <div class="w3-col m7 w3-padding-small">
+        <div class="card-box" id="invDetailArea" style="display:none;">
+          <div class="section-title">庫存細節</div>
+          <input type="hidden" id="selectedInvCode">
+
+          <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
+            <h4 id="selectedInvName" style="margin:0; font-size:1.1em"></h4>
+            <span id="selectedInvCodeDisplay" class="pos-details" style="display:block; margin-top:5px;"></span>
+          </div>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s6">
+              <label>類別:</label><input type="text" id="invCategory">
+            </div>
+            <div class="w3-col s6">
+              <label>排行:</label><input type="number" id="invRank">
+            </div>
+          </div>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s6">
+              <label>貨品代號:</label><input type="text" id="invItemCode" readonly>
+            </div>
+            <div class="w3-col s6">
+              <label>貨品名稱:</label><input type="text" id="invItemName" readonly>
+            </div>
+          </div>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s6">
+              <label>單位:</label><input type="text" id="invUnit">
+            </div>
+            <div class="w3-col s6">
+              <label>效期(天):</label><input type="number" id="invShelfLifeDays">
+            </div>
+          </div>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s6">
+              <label>效期分類:</label><input type="text" id="invShelfLifeCategory">
+            </div>
+            <div class="w3-col s6">
+              <label>銷度:</label><input type="text" id="invSalesGrade">
+            </div>
+          </div>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s6">
+              <label>交期(天):</label><input type="number" id="invLeadTimeDays">
+            </div>
+            <div class="w3-col s6">
+              <label>配送:</label><input type="text" id="invDelivery">
+            </div>
+          </div>
+
+          <div class="w3-row-padding" style="margin:0 -8px">
+            <div class="w3-col s4">
+              <label>最大進貨量參數:</label><input type="number" step="0.01" id="invMaxPurchaseParam">
+            </div>
+            <div class="w3-col s4">
+              <label>安全庫存參數:</label><input type="number" step="0.01" id="invSafetyStockParam">
+            </div>
+            <div class="w3-col s4">
+              <label>庫存週轉天數:</label><input type="number" step="0.01" id="invTurnoverDays">
+            </div>
+          </div>
+
+          <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveInventoryDetailE()">
+            <i class="fas fa-save"></i> 儲存變更
+          </button>
+        </div>
+
+        <div id="invPlaceholder" class="w3-center w3-text-grey w3-padding-32">
+          <i class="fas fa-arrow-left"></i> 請從左側選擇一個庫存品項
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="modalNewProduct" class="modal">
@@ -422,6 +516,7 @@
     units: [],
     categories: [],
     stores: [],
+    inventoryItems: [],
     currentBomType: 'product',
     currentBomItemId: null,
     selectedErpUnitId: null,
@@ -451,6 +546,7 @@
     if(id==='ModuleB') loadModuleB();
     if(id==='ModuleC') loadModuleC();
     if(id==='ModuleD') loadModuleD();
+    if(id==='ModuleE') loadModuleE();
   }
   
   function toggleSubTab(id, btn) {
@@ -1015,6 +1111,122 @@
     el.style.display = 'block';
     clearTimeout(el._t);
     el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
+  }
+
+  // ================= MODULE E =================
+  function loadModuleE() {
+    showLoading(true);
+    google.script.run.withSuccessHandler(items => {
+      G.inventoryItems = items || [];
+      renderInventoryList();
+      showLoading(false);
+    }).getModuleEData();
+  }
+
+  function filterInventoryItems() { renderInventoryList(); }
+
+  function renderInventoryList() {
+    const container = document.getElementById('invListContainer');
+    if (!container) return;
+
+    const txt = (document.getElementById('invFilter').value || '').toLowerCase();
+    container.innerHTML = '';
+
+    if (!G.inventoryItems || G.inventoryItems.length === 0) {
+      container.innerHTML = '<div class="w3-center">No Data</div>';
+      return;
+    }
+
+    const filtered = G.inventoryItems.filter(it => {
+      const code = String(it.item_code || it.product_code || '').toLowerCase();
+      const name = String(it.item_name || it.erp_inventory_name || '').toLowerCase();
+      return (code + ' ' + name).includes(txt);
+    });
+
+    filtered.forEach(it => {
+      const code = String(it.item_code || it.product_code || '').trim();
+      const name = String(it.item_name || it.erp_inventory_name || '').trim();
+      const hasDetail = !!it._has_detail;
+
+      const row = document.createElement('div');
+      row.className = 'pos-item-row';
+
+      const left = document.createElement('div');
+      left.style.flex = '1';
+      left.style.cursor = 'pointer';
+      left.innerHTML = `
+        <div style="font-weight:bold">${name}</div>
+        <div class="pos-details">${code}</div>
+      `;
+      left.addEventListener('click', () => selectInventoryItem(code));
+
+      const right = document.createElement('div');
+      right.style.textAlign = 'right';
+      right.innerHTML = `
+        <div>${hasDetail ? '<i class="fas fa-clipboard-check w3-text-green"></i>' : '<i class="fas fa-clipboard-list w3-text-grey"></i>'}</div>
+      `;
+
+      row.appendChild(left);
+      row.appendChild(right);
+      container.appendChild(row);
+    });
+  }
+
+  function selectInventoryItem(itemCode) {
+    const code = String(itemCode || '').trim();
+    const it = (G.inventoryItems || []).find(x => String(x.item_code || x.product_code || '').trim() === code);
+    if (!it) return;
+
+    document.getElementById('invDetailArea').style.display = 'block';
+    document.getElementById('invPlaceholder').style.display = 'none';
+
+    document.getElementById('selectedInvCode').value = code;
+    document.getElementById('selectedInvName').innerText = it.item_name || it.erp_inventory_name || '';
+    document.getElementById('selectedInvCodeDisplay').innerText = code;
+
+    document.getElementById('invCategory').value = it.category || '';
+    document.getElementById('invRank').value = (it.rank === null || it.rank === undefined) ? '' : it.rank;
+    document.getElementById('invItemCode').value = code;
+    document.getElementById('invItemName').value = it.item_name || it.erp_inventory_name || '';
+    // document.getElementById('invUnit').value = it.unit || it.unit_name || '';
+    document.getElementById('invShelfLifeDays').value = (it.shelf_life_days === null || it.shelf_life_days === undefined) ? '' : it.shelf_life_days;
+    document.getElementById('invShelfLifeCategory').value = it.shelf_life_category || '';
+    document.getElementById('invSalesGrade').value = it.sales_grade || '';
+    document.getElementById('invLeadTimeDays').value = (it.lead_time_days === null || it.lead_time_days === undefined) ? '' : it.lead_time_days;
+    document.getElementById('invDelivery').value = it.delivery || '';
+    document.getElementById('invMaxPurchaseParam').value = (it.max_purchase_param === null || it.max_purchase_param === undefined) ? '' : it.max_purchase_param;
+    document.getElementById('invSafetyStockParam').value = (it.safety_stock_param === null || it.safety_stock_param === undefined) ? '' : it.safety_stock_param;
+    document.getElementById('invTurnoverDays').value = (it.inventory_turnover_days === null || it.inventory_turnover_days === undefined) ? '' : it.inventory_turnover_days;
+  }
+
+  function saveInventoryDetailE() {
+    const code = document.getElementById('selectedInvCode').value;
+    if (!code) return;
+
+    const form = {
+      item_code: code,
+      category: document.getElementById('invCategory').value || null,
+      rank: document.getElementById('invRank').value ? Number(document.getElementById('invRank').value) : null,
+      item_name: document.getElementById('invItemName').value || null,
+      // unit: document.getElementById('invUnit').value || null,
+      shelf_life_days: document.getElementById('invShelfLifeDays').value ? Number(document.getElementById('invShelfLifeDays').value) : null,
+      shelf_life_category: document.getElementById('invShelfLifeCategory').value || null,
+      sales_grade: document.getElementById('invSalesGrade').value || null,
+      lead_time_days: document.getElementById('invLeadTimeDays').value ? Number(document.getElementById('invLeadTimeDays').value) : null,
+      delivery: document.getElementById('invDelivery').value || null,
+      max_purchase_param: document.getElementById('invMaxPurchaseParam').value ? Number(document.getElementById('invMaxPurchaseParam').value) : null,
+      safety_stock_param: document.getElementById('invSafetyStockParam').value ? Number(document.getElementById('invSafetyStockParam').value) : null,
+      inventory_turnover_days: document.getElementById('invTurnoverDays').value ? Number(document.getElementById('invTurnoverDays').value) : null
+    };
+
+    showLoading(true);
+    google.script.run.withSuccessHandler(items => {
+      G.inventoryItems = items || [];
+      renderInventoryList();
+      selectInventoryItem(code);
+      showLoading(false);
+      showToast_('已儲存');
+    }).upsertInventoryDetail(form);
   }
   
   window.onload = function() { document.querySelectorAll('.tab-item')[0].classList.add('active'); document.getElementById('ModuleA').style.display='block'; loadModuleA(); };
