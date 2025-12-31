@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import time
 import requests
+from urllib.parse import urlsplit, urlunsplit
 from django.conf import settings
 
 
@@ -55,7 +56,11 @@ def sync_user_to_appscript(username: str, email: str) -> bool:
         admin_token = f"{payload_b64}.{sig_b64}"
         
         # 呼叫 Apps Script API
-        url = settings.APPSCRIPT_WEBAPP_URL
+        # 注意：APPSCRIPT_WEBAPP_URL 可能已包含給 iframe 用的 token query。
+        # 這裡是 action API 呼叫，會另外帶入 admin_token，避免 URL 內既有 query 造成重複 token。
+        raw_url = (settings.APPSCRIPT_WEBAPP_URL or "").strip()
+        parts = urlsplit(raw_url)
+        url = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
         params = {
             'action': 'add_user',
             'token': admin_token,

@@ -47,20 +47,19 @@
     </div>
     {% endif %}
 
-    <form method="post">
-      {% csrf_token %}
-      <button type="submit">產生 token 並載入 Apps Script</button>
-    </form>
-
     {% if iframe_src %}
     <h3>以下是 Apps Script Web App（iframe）：</h3>
     <iframe src="{{ iframe_src }}"></iframe>
+    {% else %}
+    <div style="margin-top: 15px; padding: 12px; border: 1px solid #f5c6cb; background: #f8d7da; color: #721c24; border-radius: 4px;">
+      尚未設定 APPSCRIPT_WEBAPP_URL（或值為空），請檢查環境變數設定。
+    </div>
     {% endif %}
 
     <script>
     setTimeout(function() {
-        // 4 分鐘後自動重新整理（假設 token 有效期 5 分鐘）
-        location.reload();
+      // 定期重新整理（避免長時間閒置造成 session/授權狀態不一致）
+      location.reload();
     }, 30 * 60 * 1000);
     </script>
   </body>

@@ -4,8 +4,6 @@ from django.conf import settings
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-
-from .utils import generate_iframe_token
 from .forms import RegisterForm, LoginForm
 
 
@@ -14,12 +12,9 @@ def home(request):
     iframe_src = None
     user_id = request.user.username
 
-    if request.method == "POST":
-        # 取得請求的來源
-        origin = request.build_absolute_uri('/').rstrip('/')
-        
-        token = generate_iframe_token(user_id, origin)
-        iframe_src = f"{settings.APPSCRIPT_WEBAPP_URL}?token={token}"
+    # 仍需登入才可查看，但不再由 Django 自行產生 token。
+    # APPSCRIPT_WEBAPP_URL 會是「完整可用的 URL」（包含 token 參數）。
+    iframe_src = (settings.APPSCRIPT_WEBAPP_URL or "").strip() or None
 
     context = {
         "iframe_src": iframe_src,

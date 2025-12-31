@@ -2,45 +2,8 @@
 // Generic Helpers
 // ==========================================
 
-/**
- * 呼叫 Edge Function 的通用函式
- */
-function callEdgeFunction_(method, params, payload) {
-  const baseUrl = PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
-  const apiKey = PropertiesService.getScriptProperties().getProperty("API_KEY");
-  
-  if (!baseUrl || !apiKey) {
-    Logger.log("Error: Missing SUPABASE_URL or API_KEY in Script Properties");
-    return;
-  }
-
-  let url = baseUrl;
-  if (params) {
-    const queryString = Object.keys(params)
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-      .join('&');
-    url += `?${queryString}`;
-  }
-
-  const options = {
-    method: method,
-    contentType: "application/json",
-    headers: { "x-sync-key": apiKey, "Authorization": `Bearer ${apiKey}` },
-    muteHttpExceptions: true
-  };
-
-  if (payload) {
-    options.payload = JSON.stringify(payload);
-  }
-
-  Logger.log(`Calling ${method.toUpperCase()} ${url}`);
-  if (payload) Logger.log(`Payload: ${JSON.stringify(payload)}`);
-
-  const res = UrlFetchApp.fetch(url, options);
-  Logger.log(`Response Code: ${res.getResponseCode()}`);
-  Logger.log(`Response Body: ${res.getContentText()}`);
-  return res;
-}
+// Tool.gs 原本只用於測試；實際對 Supabase Edge Function 的呼叫邏輯以 Code.gs 的
+// `callSupabaseEdgeJson_()` 為準，避免重複維護。
 
 /**
  * 通用 Upsert (新增或更新)
@@ -56,7 +19,7 @@ function upsertRow_(table, row, conflictColumns) {
     row: row,
     conflict_columns: conflictColumns
   };
-  return callEdgeFunction_("post", null, payload);
+  return callSupabaseEdgeJson_("post", null, payload);
 }
 
 /**
@@ -71,7 +34,7 @@ function deleteRow_(table, filter) {
     table: table,
     filter: filter
   };
-  return callEdgeFunction_("post", null, payload);
+  return callSupabaseEdgeJson_("post", null, payload);
 }
 
 /**
@@ -81,7 +44,7 @@ function deleteRow_(table, filter) {
  */
 function fetchRows_(table, queryParams) {
   const params = { table: table, ...queryParams };
-  return callEdgeFunction_("get", params, null);
+  return callSupabaseEdgeJson_("get", params, null);
 }
 
 // ==========================================
@@ -169,11 +132,11 @@ function testUpsertInventoryDetail() {
 
 function testUpdateInventoryDetail() {
   // 同 item_code 會更新（依 ON CONFLICT item_code）
-  upsertInventoryDetail_({
+  return upsertRow_("inventory_details", {
     item_code: "A00002",
     delivery: "W2、5；W5會較多（更新測試）",
     lead_time_days: 7
-  });
+  }, ["item_code"]);
 }
 
 function testGetInventoryDetail() {

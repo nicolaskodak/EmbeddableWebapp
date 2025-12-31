@@ -56,14 +56,14 @@
     <p>token 簽發時間：<?= issuedAt ?></p>
 
     <script>
-      if (window.self === window.top) {
-        // 不在 iframe 中，重新導向或顯示錯誤
-        document.body.innerHTML = '<h3>此頁面只能在授權的網站中使用</h3>';
-      } else {
-        window.APP_USER_ID = '<?= userId ?>';
-        console.log("User from Django:", window.APP_USER_ID);
+      // 授權驗證已在伺服端 doGet() 完成（token + 權限）。
+      // 這裡只做前端環境標記，不再因為「不是 iframe」而阻擋整頁渲染。
+      window.APP_USER_ID = '<?= userId ?>';
+      window.APP_IS_IFRAME = (window.self !== window.top);
+      if (!window.APP_IS_IFRAME) {
+        console.warn('此頁面目前不是在 iframe 中載入；若為除錯用途可忽略。');
       }
-      
+      console.log('App user:', window.APP_USER_ID);
     </script>
 
     <!-- 這裡開始放你原本的 UI 功能 -->

@@ -27,31 +27,29 @@ function doGet(e) {
     return handleAddUser_(e);
   }
   
-  // 一般 iframe 載入請求
+  // 一般 iframe 載入請求：改用 profile API 驗證（舊 verifyToken_ 先保留不刪）
   var token = (e.parameter.token || '').trim();
-  var allowedOrigins = [
-    'http://127.0.0.1:8000',
-    'http://localhost:8000',
-    'https://tomato.yujing.me/mgmt',
-    'https://procura.yujing.me/mgmt'
-  ];
-
-  var user = verifyToken_(token, allowedOrigins);
-  if (!user) {
+  if (!token) {
     return HtmlService.createHtmlOutput('<h3>未授權存取</h3>')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
-  // 檢查使用者是否存在於 Google Sheets
-  if (!userExists_(user.userId)) {
-    return HtmlService.createHtmlOutput('<h3>使用者不存在或已被停用</h3>')
+  var profile = verifyTokenByProfileApi_(token);
+  if (!profile) {
+    return HtmlService.createHtmlOutput('<h3>未授權存取</h3>')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // perm 內含 commodity 才可存取
+  if (!hasCommodityPerm_(profile.perm)) {
+    return HtmlService.createHtmlOutput('<h3>沒有權限存取</h3>')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   // 驗證成功，把 userId 帶進頁面 (Template)
   var tpl = HtmlService.createTemplateFromFile('Index');
-  tpl.userId = user.userId;
-  tpl.issuedAt = new Date(user.ts * 1000);
+  tpl.userId = profile.username || profile.uid || 'unknown';
+  tpl.issuedAt = new Date();
 
   return tpl
     .evaluate()
@@ -59,6 +57,56 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   
+}
+
+/* =========================================
+   New Auth: Profile API 驗證
+   ========================================= */
+
+function verifyTokenByProfileApi_(accessToken) {
+  var url = 'https://tomato.yujing.me/api/profile';
+  var res = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: {
+      // 注意：依需求使用小寫 bearer
+      Authorization: 'bearer ' + String(accessToken || '').trim()
+    },
+    muteHttpExceptions: true
+  });
+
+  var code = res.getResponseCode();
+  if (code !== 200) {
+    Logger.log('Profile API non-200: ' + code + ' body=' + res.getContentText());
+    return null;
+  }
+
+  var text = res.getContentText();
+  var json;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (e) {
+    Logger.log('Profile API invalid JSON: ' + e);
+    return null;
+  }
+
+  if (!json || json.code !== 0 || !json.result) {
+    Logger.log('Profile API unexpected payload: ' + text);
+    return null;
+  }
+
+  // 回傳 result 供後續檢查 perm/username
+  return json.result;
+}
+
+function hasCommodityPerm_(perm) {
+  if (!perm || !Array.isArray(perm)) return false;
+
+  for (var i = 0; i < perm.length; i++) {
+    var p = perm[i];
+    if (p === 'commodity') return true;
+    if (p && typeof p === 'object' && String(p.key || '') === 'commodity') return true;
+  }
+  return false;
 }
 
 /**
@@ -246,67 +294,6 @@ function verifyToken_(token, allowedOrigins) {
   return { userId: userId, ts: ts, origin: origin };
 }
 
-/* =========================================
-   Module: Store 門市對應關係管理
-   ========================================= */
-function getStoreSheet_() {
-  var sheetId = PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID');
-  if (!sheetId) {
-    throw new Error('請在專案屬性中設定 STORE_SHEET_ID');
-  }
-  
-  var ss = SpreadsheetApp.openById(sheetId);
-  var sheet = ss.getSheetByName('data') || ss.insertSheet('data');
-  
-  // 確保有標題列
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
-    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
-  }
-
-  ensureStoreSheetSchema_(sheet);
-  
-  return sheet;
-}
-
-function ensureStoreSheetSchema_(sheet) {
-  if (!sheet) return;
-
-  var lastCol = sheet.getLastColumn();
-  if (lastCol === 0) {
-    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
-    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
-    return;
-  }
-
-  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
-    return String(h || '').trim();
-  });
-
-  var idColIndex = headers.indexOf('id');
-  if (idColIndex === -1) {
-    idColIndex = headers.length;
-    sheet.insertColumnAfter(lastCol);
-    sheet.getRange(1, idColIndex + 1).setValue('id').setFontWeight('bold');
-    headers.push('id');
-  }
-
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-
-  var idRange = sheet.getRange(2, idColIndex + 1, lastRow - 1, 1);
-  var idValues = idRange.getValues();
-  var changed = false;
-  for (var i = 0; i < idValues.length; i++) {
-    var v = String(idValues[i][0] || '').trim();
-    if (!v) {
-      idValues[i][0] = Utilities.getUuid();
-      changed = true;
-    }
-  }
-  if (changed) idRange.setValues(idValues);
-}
-
 
 /* 
 -- pos, bom, erp
@@ -411,6 +398,55 @@ function deleteRowById(tableName, idColName, idValue) {
   return deleteRowByCondition(tableName, (row) => String(row[idColName]) === String(idValue));
 }
 
+function callSupabaseEdgeJson_(method, params, payload) {
+  var baseUrl = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
+  var apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+
+  if (!baseUrl || !apiKey) {
+    throw new Error('Missing SUPABASE_URL or API_KEY in Script Properties');
+  }
+
+  var url = baseUrl;
+  if (params) {
+    var queryString = Object.keys(params)
+      .filter(function (k) { return params[k] !== undefined && params[k] !== null; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])); })
+      .join('&');
+    if (queryString) url += '?' + queryString;
+  }
+
+  var options = {
+    method: method,
+    contentType: 'application/json',
+    headers: {
+      'x-sync-key': apiKey,
+      'Authorization': 'Bearer ' + apiKey
+    },
+    muteHttpExceptions: true
+  };
+
+  if (payload) {
+    options.payload = JSON.stringify(payload);
+  }
+
+  var res = UrlFetchApp.fetch(url, options);
+  var code = res.getResponseCode();
+  var text = res.getContentText();
+
+  var json;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (e) {
+    json = { raw: text };
+  }
+
+  if (code < 200 || code >= 300) {
+    throw new Error('Edge Function error ' + code + ': ' + text);
+  }
+
+  return json;
+}
+
 /* =========================================
    Module A: POS 名稱對應
    ========================================= */
@@ -459,7 +495,7 @@ function updatePosStatus(posItemId, newStatus) {
 /* =========================================
    Module B: 產品與食材資料
    ========================================= */
-   
+
 function getModuleBData() {
   const products = getTableData(DB_CONFIG.products.name);
   const categories = getTableData(DB_CONFIG.product_categories.name);
@@ -637,6 +673,65 @@ function linkIngredientComplex(form) {
 /* =========================================
    Module D: 門市對應
    ========================================= */
+
+function getStoreSheet_() {
+  var sheetId = PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID');
+  if (!sheetId) {
+    throw new Error('請在專案屬性中設定 STORE_SHEET_ID');
+  }
+  
+  var ss = SpreadsheetApp.openById(sheetId);
+  var sheet = ss.getSheetByName('data') || ss.insertSheet('data');
+  
+  // 確保有標題列
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
+    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
+  }
+
+  ensureStoreSheetSchema_(sheet);
+  
+  return sheet;
+}
+
+function ensureStoreSheetSchema_(sheet) {
+  if (!sheet) return;
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) {
+    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
+    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
+    return;
+  }
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
+    return String(h || '').trim();
+  });
+
+  var idColIndex = headers.indexOf('id');
+  if (idColIndex === -1) {
+    idColIndex = headers.length;
+    sheet.insertColumnAfter(lastCol);
+    sheet.getRange(1, idColIndex + 1).setValue('id').setFontWeight('bold');
+    headers.push('id');
+  }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var idRange = sheet.getRange(2, idColIndex + 1, lastRow - 1, 1);
+  var idValues = idRange.getValues();
+  var changed = false;
+  for (var i = 0; i < idValues.length; i++) {
+    var v = String(idValues[i][0] || '').trim();
+    if (!v) {
+      idValues[i][0] = Utilities.getUuid();
+      changed = true;
+    }
+  }
+  if (changed) idRange.setValues(idValues);
+}
+
 function getModuleDData() {
   try {
     var sheet = getStoreSheet_();
@@ -814,55 +909,6 @@ function deleteStoreRowById_(sheet, id) {
 /* =========================================
    Module E: 庫存細節 (Supabase inventory_details + Sheet erp_inventory)
    ========================================= */
-
-function callSupabaseEdgeJson_(method, params, payload) {
-  var baseUrl = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
-  var apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
-
-  if (!baseUrl || !apiKey) {
-    throw new Error('Missing SUPABASE_URL or API_KEY in Script Properties');
-  }
-
-  var url = baseUrl;
-  if (params) {
-    var queryString = Object.keys(params)
-      .filter(function (k) { return params[k] !== undefined && params[k] !== null; })
-      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])); })
-      .join('&');
-    if (queryString) url += '?' + queryString;
-  }
-
-  var options = {
-    method: method,
-    contentType: 'application/json',
-    headers: {
-      'x-sync-key': apiKey,
-      'Authorization': 'Bearer ' + apiKey
-    },
-    muteHttpExceptions: true
-  };
-
-  if (payload) {
-    options.payload = JSON.stringify(payload);
-  }
-
-  var res = UrlFetchApp.fetch(url, options);
-  var code = res.getResponseCode();
-  var text = res.getContentText();
-
-  var json;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch (e) {
-    json = { raw: text };
-  }
-
-  if (code < 200 || code >= 300) {
-    throw new Error('Edge Function error ' + code + ': ' + text);
-  }
-
-  return json;
-}
 
 function getModuleEData() {
   // 1) 來源：Google Sheet 的 erp_inventory（列出所有庫存品項）
