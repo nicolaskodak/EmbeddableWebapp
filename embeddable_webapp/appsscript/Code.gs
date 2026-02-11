@@ -1,67 +1,21 @@
-/* =========================================
-   Module: Users 使用者管理
-   ========================================= */
-function getSheet_() {
-  var sheetId = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
-  if (!sheetId) {
-    throw new Error('請在專案屬性中設定 SHEET_ID');
-  }
-  
-  var ss = SpreadsheetApp.openById(sheetId);
-  var sheet = ss.getSheetByName('Users') || ss.insertSheet('Users');
-  
-  // 確保有標題列
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['Username', 'Email', 'Created At', 'Status']);
-    sheet.getRange(1, 1, 1, 4).setFontWeight('bold');
-  }
-  
-  return sheet;
-}
+function doGet() {
+  var props = PropertiesService.getScriptProperties();
+  var t = HtmlService.createTemplateFromFile('Index');
 
-function doGet(e) {
-  var action = e.parameter.action || '';
-  
-  // 處理新增使用者的請求
-  if (action === 'add_user') {
-    return handleAddUser_(e);
-  }
-  
-  // 一般 iframe 載入請求：改用 profile API 驗證（舊 verifyToken_ 先保留不刪）
-  var token = (e.parameter.token || '').trim();
-  if (!token) {
-    return HtmlService.createHtmlOutput('<h3>未授權存取</h3>')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
+  t.RUNTIME_CONFIG = {
+    parentOrigin: props.getProperty('PARENT_ORIGIN'),
+    tokenTransport: props.getProperty('TOKEN_TRANSPORT') || 'messagePort',
+  };
 
-  var profile = verifyTokenByProfileApi_(token);
-  if (!profile) {
-    return HtmlService.createHtmlOutput('<h3>未授權存取</h3>')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
-
-  // perm 內含 commodity 才可存取
-  if (!hasCommodityPerm_(profile.perm)) {
-    return HtmlService.createHtmlOutput('<h3>沒有權限存取</h3>')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
-
-  // 驗證成功，把 userId 帶進頁面 (Template)
-  var tpl = HtmlService.createTemplateFromFile('Index');
-  tpl.userId = profile.username || profile.uid || 'unknown';
-  tpl.issuedAt = new Date();
-
-  return tpl
+  return t
     .evaluate()
-    .setTitle('Tomato BOM 表資料工具')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  
+    // 注意：Apps Script Web App 實際 iframe origin 通常會是 script.googleusercontent.com
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/* =========================================
-   New Auth: Profile API 驗證
-   ========================================= */
+/* 
+-- user authentication
+ */
 
 function verifyTokenByProfileApi_(accessToken) {
   var url = 'https://tomato.yujing.me/api/profile';
@@ -69,9 +23,9 @@ function verifyTokenByProfileApi_(accessToken) {
     method: 'get',
     headers: {
       // 注意：依需求使用小寫 bearer
-      Authorization: 'bearer ' + String(accessToken || '').trim()
+      Authorization: 'bearer ' + String(accessToken || '').trim(),
     },
-    muteHttpExceptions: true
+    muteHttpExceptions: true,
   });
 
   var code = res.getResponseCode();
@@ -95,6 +49,7 @@ function verifyTokenByProfileApi_(accessToken) {
   }
 
   // 回傳 result 供後續檢查 perm/username
+  Logger.log( JSON.stringify(json.result));
   return json.result;
 }
 
@@ -109,189 +64,15 @@ function hasCommodityPerm_(perm) {
   return false;
 }
 
-/**
- * 處理新增使用者的請求
- */
-function handleAddUser_(e) {
-  var token = (e.parameter.token || '').trim();
-  var username = (e.parameter.username || '').trim();
-  var email = (e.parameter.email || '').trim();
-  
-  // 驗證管理員 token
-  if (!verifyAdminToken_(token, username, email)) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: 'Invalid token'
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-  
-  try {
-    var sheet = getSheet_();
-    
-    // 檢查使用者是否已存在
-    var data = sheet.getDataRange().getValues();
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === username) {
-        return ContentService.createTextOutput(JSON.stringify({
-          success: true,
-          message: 'User already exists'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-    
-    // 新增使用者
-    sheet.appendRow([
-      username,
-      email,
-      new Date().toISOString(),
-      'active'
-    ]);
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      message: 'User added successfully'
-    })).setMimeType(ContentService.MimeType.JSON);
-    
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-/**
- * 驗證管理員 token（用於新增使用者）
- */
-function verifyAdminToken_(token, username, email) {
-  if (!token) return false;
-
-  var parts = token.split('.');
-  if (parts.length !== 2) return false;
-
-  var payloadB64 = parts[0];
-  var sigB64 = parts[1];
-
-  var payloadBytes, payloadStr;
-  try {
-    payloadBytes = Utilities.base64DecodeWebSafe(payloadB64);
-    payloadStr = Utilities.newBlob(payloadBytes).getDataAsString();
-  } catch (err) {
-    return false;
+function checkCommodityPermission(accessToken) {
+  var profile = verifyTokenByProfileApi_(accessToken);
+  if (!profile) {
+    return { allowed: false };
   }
 
-  var split = payloadStr.split('|');
-  if (split.length !== 4) return false;
-
-  var action = split[0];
-  var tokenUsername = split[1];
-  var tokenEmail = split[2];
-  var tsStr = split[3];
-  var ts = parseInt(tsStr, 10);
-
-  if (action !== 'add_user' || tokenUsername !== username || tokenEmail !== email) {
-    return false;
-  }
-
-  // 檢查是否過期（10 分鐘）
-  var nowSec = Math.floor(new Date().getTime() / 1000);
-  if (nowSec - ts > 600) {
-    return false;
-  }
-
-  // 驗證簽章
-  var secret = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
-  if (!secret) return false;
-
-  var data = action + '|' + tokenUsername + '|' + tokenEmail + '|' + tsStr;
-  var hmacBytes = Utilities.computeHmacSha256Signature(data, secret);
-  var expectedSigB64 = Utilities.base64EncodeWebSafe(hmacBytes).replace(/=+$/, '');
-
-  return sigB64 === expectedSigB64;
-}
-
-/**
- * 檢查使用者是否存在且狀態為 active
- */
-function userExists_(username) {
-  try {
-    var sheet = getSheet_();
-    var data = sheet.getDataRange().getValues();
-    
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === username && data[i][3] === 'active') {
-        return true;
-      }
-    }
-    
-    return false;
-  } catch (error) {
-    Logger.log('檢查使用者時發生錯誤: ' + error);
-    return false;
-  }
-}
-
-/**
- * 驗證 token：
- *  token 格式: payload_b64 + '.' + sig_b64
- *  payload = "userId|timestamp|origin" (UTF-8)，timestamp = epoch seconds
- *  sig = base64url( HMAC_SHA256(secret, payload) ).rstrip('=')
- */
-function verifyToken_(token, allowedOrigins) {
-  if (!token) return null;
-
-  var parts = token.split('.');
-  if (parts.length !== 2) return null;
-
-  var payloadB64 = parts[0];
-  var sigB64 = parts[1];
-
-  // 解析 payload
-  var payloadBytes, payloadStr;
-  try {
-    payloadBytes = Utilities.base64DecodeWebSafe(payloadB64);
-    payloadStr = Utilities.newBlob(payloadBytes).getDataAsString(); // UTF-8
-  } catch (err) {
-    return null;
-  }
-
-  var split = payloadStr.split('|');
-  if (split.length !== 3) return null;
-
-  var userId = split[0];
-  var tsStr = split[1];
-  var origin = split[2];
-  var ts = parseInt(tsStr, 10);
-  if (!userId || !ts || isNaN(ts) || !origin) return null;
-
-  // 檢查來源是否在允許清單中
-  if (allowedOrigins.indexOf(origin) === -1) {
-    return null;
-  }
-
-  // 檢查是否過期（例如 1 小時）
-  var expiration_minutes = PropertiesService.getScriptProperties().getProperty('EXPIRATION_MINUTES');
-  var nowSec = Math.floor(new Date().getTime() / 1000);
-  var maxAgeSec = 60 * parseInt(expiration_minutes, 5); // 預設 5 分鐘
-  if (nowSec - ts > maxAgeSec) {
-    return null;
-  }
-
-  // 重新計算 signature
-  var secret = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
-  if (!secret) {
-    throw new Error('沒有設定 SHARED_SECRET');
-  }
-
-  var data = userId + '|' + tsStr + '|' + origin;
-  var hmacBytes = Utilities.computeHmacSha256Signature(data, secret);
-  var expectedSigB64 = Utilities.base64EncodeWebSafe(hmacBytes).replace(/=+$/, '');
-
-  if (sigB64 !== expectedSigB64) {
-    return null;
-  }
-
-  return { userId: userId, ts: ts, origin: origin };
+  // 常見欄位：perm
+  var allowed = hasCommodityPerm_(profile.perm);
+  return { allowed: allowed };
 }
 
 
@@ -399,11 +180,14 @@ function deleteRowById(tableName, idColName, idValue) {
 }
 
 function callSupabaseEdgeJson_(method, params, payload) {
+  /* 
+  唯一能和資料庫互動的工具
+  */
   var baseUrl = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
-  var apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+  var syncKey = PropertiesService.getScriptProperties().getProperty('SYNC_KEY');
 
-  if (!baseUrl || !apiKey) {
-    throw new Error('Missing SUPABASE_URL or API_KEY in Script Properties');
+  if (!baseUrl || !syncKey) {
+    throw new Error('Missing SUPABASE_URL or SYNC_KEY in Script Properties');
   }
 
   var url = baseUrl;
@@ -419,8 +203,8 @@ function callSupabaseEdgeJson_(method, params, payload) {
     method: method,
     contentType: 'application/json',
     headers: {
-      'x-sync-key': apiKey,
-      'Authorization': 'Bearer ' + apiKey
+      'x-sync-key': syncKey,
+      'Authorization': 'Bearer ' + syncKey
     },
     muteHttpExceptions: true
   };
@@ -990,4 +774,23 @@ function upsertInventoryDetail(form) {
   });
 
   return getModuleEData();
+}
+
+function testGetInventoryDetail() {
+  // getInventoryDetailByItemCode_("A00002");
+  // return fetchRows_("inventory_details", { col: "item_code", val: "A00002" });
+  const res = callSupabaseEdgeJson_("get", { schema: "tb_mgmt", table: "erp_inventory", col: "erp_inventory_name", val: "◎熱狗" }, null);
+  Logger.log(res)
+}
+
+function testUpdateInventoryDetail() {
+  // 同 item_code 會更新（依 ON CONFLICT item_code）
+  return callSupabaseEdgeJson_("post", null, { op: "upsert", event_id: Utilities.getUuid(), schema: "public", table: "inventory_details", row: {item_code: "A00005", lead_time_days: 99}, conflicte_columns: ["item_code"] });
+}
+
+function testDeleteInventoryDetail() {
+  // deleteInventoryDetailByItemCode_("A00002");
+  const params = null;
+  const body = { table:"inventory_details", schema: "public", op: "delete", event_id: Utilities.getUuid(), filter: { item_code: "A00012" } };
+  return callSupabaseEdgeJson_( "post", null, body);
 }

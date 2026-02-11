@@ -68,1168 +68,1170 @@
 
     <!-- 這裡開始放你原本的 UI 功能 -->
     <div class="loading-overlay" id="loading">
-  <i class="fas fa-spinner fa-spin fa-3x" style="color:#d35400"></i><br><b>處理中...</b>
-</div>
+      <i class="fas fa-spinner fa-spin fa-3x" style="color:#d35400"></i><br><b>處理中...</b>
+    </div>
 
-<div class="header">
-  <span><i class="fas fa-carrot"></i> Tomato BOM 表資料工具</span>
-</div>
+    <div class="header">
+      <span><i class="fas fa-carrot"></i> Tomato BOM 表資料工具</span>
+    </div>
 
-<div id="toast" class="w3-panel w3-pale-green w3-border" style="display:none; position:fixed; top:70px; right:20px; z-index:99999; max-width:320px; pointer-events:none;"></div>
+    <div id="toast" class="w3-panel w3-pale-green w3-border" style="display:none; position:fixed; top:70px; right:20px; z-index:99999; max-width:320px; pointer-events:none;"></div>
 
-<div class="tab-bar">
-  <div class="tab-item active" onclick="switchTab('ModuleA', event)">POS名稱對應</div>
-  <div class="tab-item" onclick="switchTab('ModuleB', event)">產品與食材資料</div>
-  <div class="tab-item" onclick="switchTab('ModuleC', event)">ERP庫存對應</div>
-  <div class="tab-item" onclick="switchTab('ModuleD', event)">門市對應</div>
-  <div class="tab-item" onclick="switchTab('ModuleE', event)">庫存細節</div>
-</div>
+    <div class="tab-bar">
+      <div class="tab-item active" onclick="switchTab('ModuleA', event)">POS名稱對應</div>
+      <div class="tab-item" onclick="switchTab('ModuleB', event)">產品與食材資料</div>
+      <div class="tab-item" onclick="switchTab('ModuleC', event)">ERP庫存對應</div>
+      <div class="tab-item" onclick="switchTab('ModuleD', event)">門市對應</div>
+      <div class="tab-item" onclick="switchTab('ModuleE', event)">庫存細節</div>
+    </div>
 
-<div class="content-area">
-  
-  <div id="ModuleA" class="tab-content">
-    <div class="w3-row">
-      <div class="w3-col m5 w3-padding-small">
-        <div class="w3-row-padding" style="margin:0 -8px">
-           <div class="w3-col s12">
-              <input type="text" id="posFilter" placeholder="搜尋 POS 品項..." onkeyup="filterPosItems()">
-           </div>
-           <div class="w3-col s6">
-              <select id="posStatusFilter" onchange="filterPosItems()">
-                <option value="有效" selected>有效</option>
-                <option value="無效">無效</option>
-                <option value="all">全部狀態</option>
-              </select>
-           </div>
-           <div class="w3-col s6">
-              <select id="posLinkFilter" onchange="filterPosItems()">
-                <option value="all" selected>全部連結狀態</option>
-                <option value="linked">已連結</option>
-                <option value="unlinked">未連結</option>
-              </select>
-           </div>
-        </div>
-        
-        <div id="posListContainer" class="card-box" style="min-height: 200px; padding:0;">
-          <div class="w3-center w3-padding w3-text-grey">載入中...</div>
-        </div>
-      </div>
+    <div class="content-area">
       
-      <div class="w3-col m7 w3-padding-small">
-        <div class="card-box" id="mappingArea" style="display:none;">
-          <div class="section-title">設定標準商品對應</div>
-          <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
-            <h4 id="selectedPosName" style="margin:0; font-size:1.1em"></h4>
-            <span id="selectedPosDetail" class="pos-details" style="display:block; margin-top:5px;"></span>
+      <div id="ModuleA" class="tab-content">
+        <div class="w3-row">
+          <div class="w3-col m5 w3-padding-small">
+            <div class="w3-row-padding" style="margin:0 -8px">
+              <div class="w3-col s12">
+                  <input type="text" id="posFilter" placeholder="搜尋 POS 品項..." onkeyup="filterPosItems()">
+              </div>
+              <div class="w3-col s6">
+                  <select id="posStatusFilter" onchange="filterPosItems()">
+                    <option value="有效" selected>有效</option>
+                    <option value="無效">無效</option>
+                    <option value="all">全部狀態</option>
+                  </select>
+              </div>
+              <div class="w3-col s6">
+                  <select id="posLinkFilter" onchange="filterPosItems()">
+                    <option value="all" selected>全部連結狀態</option>
+                    <option value="linked">已連結</option>
+                    <option value="unlinked">未連結</option>
+                  </select>
+              </div>
+            </div>
+            
+            <div id="posListContainer" class="card-box" style="min-height: 200px; padding:0;">
+              <div class="w3-center w3-padding w3-text-grey">載入中...</div>
+            </div>
           </div>
           
-          <p><i class="fas fa-info-circle w3-text-blue"></i> 組合內容 (最多5項)：</p>
-          <div id="productSelectsContainer"></div>
+          <div class="w3-col m7 w3-padding-small">
+            <div class="card-box" id="mappingArea" style="display:none;">
+              <div class="section-title">設定標準商品對應</div>
+              <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
+                <h4 id="selectedPosName" style="margin:0; font-size:1.1em"></h4>
+                <span id="selectedPosDetail" class="pos-details" style="display:block; margin-top:5px;"></span>
+              </div>
+              
+              <p><i class="fas fa-info-circle w3-text-blue"></i> 組合內容 (最多5項)：</p>
+              <div id="productSelectsContainer"></div>
+              
+              <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveMapping()">
+                <i class="fas fa-save"></i> 儲存對應關係
+              </button>
+            </div>
+            <div id="mappingPlaceholder" class="w3-center w3-text-grey w3-padding-32">
+              <i class="fas fa-arrow-left"></i> 請從左側選擇一個 POS 品項
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ModuleB" class="tab-content" style="display:none">
+        
+        <div class="w3-bar w3-light-grey w3-round w3-margin-bottom w3-small">
+          <button class="w3-bar-item w3-button w3-dark-grey" onclick="toggleSubTab('subProduct', this)">產品配方</button>
+          <button class="w3-bar-item w3-button" onclick="toggleSubTab('subSemi', this)">半成品配方</button>
+          <button class="w3-bar-item w3-button" onclick="toggleSubTab('subIngList', this)">食材列表</button>
+          <button class="w3-bar-item w3-button" onclick="toggleSubTab('subIng', this)">建立食材</button>
+          <button class="w3-bar-item w3-button" onclick="toggleSubTab('subUnits', this)">單位設定</button>
+        </div>
+
+        <div id="subProduct" class="sub-tab">
+          <div class="card-box">
+            <label>選擇產品編輯:</label>
+            <div style="display:flex; gap:5px; align-items:center;">
+              <select id="productSelectB" onchange="loadBom('product')" style="margin-bottom:0;"></select>
+              <button class="w3-button w3-light-grey w3-border w3-round" onclick="openEditProductModal()" title="編輯產品資料"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <hr>
+            <div class="w3-row">
+                <div class="w3-col s6" style="padding-right:5px">
+                  <button class="w3-button w3-green w3-small w3-round w3-block" onclick="openCreateProductModal()">+ 建立新產品</button>
+                </div>
+                <div class="w3-col s6" style="padding-left:5px">
+                  <button class="w3-button w3-orange w3-text-white w3-small w3-round w3-block" onclick="openCreateCategoryModal()">+ 新增類別</button>
+                </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="subSemi" class="sub-tab" style="display:none">
+          <div class="card-box w3-pale-yellow">
+            <label>選擇半成品編輯配方:</label>
+            <div style="display:flex; gap:5px;">
+              <select id="semiSelectB" onchange="loadBom('semi')"></select>
+            </div>
+            <small>僅顯示標記為「半成品」的食材。若需修改名稱請至[食材列表]。</small>
+          </div>
+        </div>
+        
+        <div id="subIngList" class="sub-tab" style="display:none">
+          <div class="card-box">
+            <input type="text" id="ingListSearch" placeholder="搜尋食材名稱..." onkeyup="renderIngList()">
+            <div class="w3-container w3-light-grey w3-padding-small w3-round" style="margin-bottom:10px;">
+              <span class="w3-small">共有 <b id="ingCount">0</b> 項食材</span>
+            </div>
+            <div id="ingListContainer" style="height: 400px; overflow-y: auto;"></div>
+          </div>
+        </div>
+
+        <div id="subIng" class="sub-tab" style="display:none">
+          <div class="card-box w3-pale-green">
+            <div class="section-title">建立新食材</div>
+            <label>食材名稱:</label><input type="text" id="newIngName">
+            <label>來源:</label>
+            <select id="newIngSource"><option value="總部叫貨">總部叫貨</option><option value="自行採購">自行採購</option></select>
+            <label>類型:</label>
+            <select id="newIngIsSemi"><option value="false">一般原物料</option><option value="true">半成品 (需製作)</option></select>
+            <button class="w3-button w3-dark-grey w3-block w3-round" onclick="createIngredient()">建立</button>
+          </div>
+        </div>
+
+        <div id="subUnits" class="sub-tab" style="display:none">
+          <div class="card-box">
+            <div class="section-title">單位管理</div>
+            <div class="w3-row" style="margin-bottom:15px">
+              <div class="w3-col s9">
+                <input type="text" id="newUnitNameInput" placeholder="輸入新單位名稱 (如: 箱)..." style="margin-bottom:0">
+              </div>
+              <div class="w3-col s3" style="padding-left:10px">
+                <button class="w3-button w3-green w3-block w3-round" onclick="addUnit()">新增</button>
+              </div>
+            </div>
+            <div class="w3-container w3-light-grey w3-padding-small w3-round" style="margin-bottom:10px;">
+              <span class="w3-small">已建立單位列表 (點擊可修改):</span>
+            </div>
+            <div id="unitListContainer" style="height: 350px; overflow-y: auto;">
+              </div>
+          </div>
+        </div>
+
+        <div id="bomEditor" class="card-box" style="display:none; border-top: 4px solid #3498db; margin-top:15px;">
+          <h4 style="margin-top:0"><span id="bomTargetName"></span> 的配方表</h4>
+          <ul id="bomList" class="w3-ul w3-border w3-white"></ul>
+          <div class="w3-light-grey w3-padding w3-margin-top w3-round">
+            <label><i class="fas fa-plus"></i> 新增配方材料:</label>
+            <input type="text" id="bomIngSearch" placeholder="搜尋食材..." onkeyup="filterBomIngredients()">
+            <select id="bomIngSelect" size="3"></select>
+            <div class="w3-row-padding" style="margin:0 -8px">
+              <div class="w3-col s6"><input type="number" id="bomQty" placeholder="數量"></div>
+              <div class="w3-col s6"><select id="bomUnit"></select></div>
+            </div>
+            <button class="w3-button w3-blue w3-block w3-round" onclick="addToBom()">加入</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ModuleC" class="tab-content" style="display:none">
+        <div class="card-box w3-pale-red">
+          <label>選擇食材:</label>
+          <div class="w3-row-padding" style="margin:0 -8px 8px -8px">
+            <div class="w3-col s12">
+              <select id="ingLinkFilterC" onchange="renderIngDropdownC()">
+                <option value="unlinked" selected>未連結 (預設)</option>
+                <option value="linked">已連結 (修改)</option>
+                <option value="all">全部食材</option>
+              </select>
+            </div>
+          </div>
+          <select id="ingSelectC" size="5" onchange="onIngChangeC()"></select>
+        </div>
+
+        <div class="card-box">
+          <div class="section-title">1. 選擇 ERP 對應品項</div>
+          <input type="text" id="erpSearchC" placeholder="輸入 ERP 代號或名稱..." onkeyup="searchErpC()">
+          <select id="erpResultC" size="4" onchange="onSelectErpItem()"></select>
+          <div class="w3-text-grey w3-small" id="erpUnitHint"></div>
+
+          <div class="section-title w3-margin-top">2. 單位換算設定</div>
+          <div class="conv-grid">
+            <div class="conv-card">
+                <span class="conv-card-header w3-text-blue">步驟一：總倉收貨單位 (進大出小)</span>
+                <div class="conv-row">
+                  <span>1</span>
+                  <select id="whOutUnit" class="unit-sel" style="margin:0; width:auto; flex:1"></select>
+                </div>
+                <div class="conv-arrow"><i class="fas fa-arrow-down"></i> 內容含</div>
+                <div class="conv-row">
+                  <input type="number" id="whOutQty" placeholder="數量" style="margin:0; width:80px">
+                  <span id="whOutBaseUnitDisplay" class="fixed-tag">?</span>
+                </div>
+            </div>
+            <div class="conv-card">
+                <span class="conv-card-header w3-text-green">步驟二：門市使用單位 (拆封使用)</span>
+                <div class="conv-row">
+                  <span>1</span>
+                  <select id="whInUnit" class="unit-sel" style="margin:0; width:auto; flex:1"></select>
+                </div>
+                <div class="conv-arrow"><i class="fas fa-arrow-down"></i> 內容含</div>
+                <div class="conv-row">
+                  <input type="number" id="whInQty" placeholder="數量" style="margin:0; width:80px">
+                  <select id="whInBaseUnit" class="unit-sel" style="margin:0; width:auto; flex:1"></select>
+                </div>
+            </div>
+          </div>
+          <button class="w3-button w3-deep-orange w3-block w3-margin-top w3-round" onclick="saveInventoryLink()">確認連結並儲存</button>
+        </div>
+      </div>
+      <div id="ModuleD" class="tab-content" style="display:none">
+        <div class="w3-row">
+          <div class="w3-col m5 w3-padding-small">
+            <div class="w3-row-padding" style="margin:0 -8px">
+              <div class="w3-col s12">
+                  <input type="text" id="storeFilter" placeholder="搜尋 ERP 門市名稱..." onkeyup="filterStores()">
+              </div>
+              <div class="w3-col s6">
+                  <select id="storeStatusFilter" onchange="filterStores()">
+                    <option value="active" selected>有效 (Active)</option>
+                    <option value="inactive">無效 (Inactive)</option>
+                    <option value="all">全部狀態</option>
+                  </select>
+              </div>
+              <div class="w3-col s6">
+                  <select id="storeLinkFilter" onchange="filterStores()">
+                    <option value="all" selected>全部連結狀態</option>
+                    <option value="linked">已連結 POS</option>
+                    <option value="unlinked">未連結 POS</option>
+                  </select>
+              </div>
+            </div>
+            
+            <div id="storeListContainer" class="card-box" style="min-height: 200px; padding:0;">
+              <div class="w3-center w3-padding w3-text-grey">載入中...</div>
+            </div>
+          </div>
           
-          <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveMapping()">
-            <i class="fas fa-save"></i> 儲存對應關係
-          </button>
-        </div>
-        <div id="mappingPlaceholder" class="w3-center w3-text-grey w3-padding-32">
-          <i class="fas fa-arrow-left"></i> 請從左側選擇一個 POS 品項
-        </div>
-      </div>
-    </div>
-  </div>
+          <div class="w3-col m7 w3-padding-small">
+            <div class="card-box" id="storeDetailArea" style="display:none;">
+              <div class="section-title">門市詳細資料與綁定</div>
+              <input type="hidden" id="selectedStoreId">
+              
+              <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
+                <h4 id="selectedErpName" style="margin:0; font-size:1.1em"></h4>
+                <span id="selectedStoreType" class="w3-tag w3-blue w3-small w3-round" style="margin-top:5px;"></span>
+              </div>
+              
+              <label>綁定 POS 門市名稱:</label>
+              <div style="display:flex; gap:5px;">
+                <input type="text" id="posStoreNameInput" placeholder="輸入 POS 門市名稱">
+                <button class="w3-button w3-light-grey w3-border w3-round" onclick="clearPosStoreName()" title="清除"><i class="fas fa-times"></i></button>
+              </div>
+              <small class="w3-text-grey">請輸入對應的 POS 系統門市名稱</small>
 
-  <div id="ModuleB" class="tab-content" style="display:none">
-    
-    <div class="w3-bar w3-light-grey w3-round w3-margin-bottom w3-small">
-      <button class="w3-bar-item w3-button w3-dark-grey" onclick="toggleSubTab('subProduct', this)">產品配方</button>
-      <button class="w3-bar-item w3-button" onclick="toggleSubTab('subSemi', this)">半成品配方</button>
-      <button class="w3-bar-item w3-button" onclick="toggleSubTab('subIngList', this)">食材列表</button>
-      <button class="w3-bar-item w3-button" onclick="toggleSubTab('subIng', this)">建立食材</button>
-      <button class="w3-bar-item w3-button" onclick="toggleSubTab('subUnits', this)">單位設定</button>
-    </div>
+              <hr>
 
-    <div id="subProduct" class="sub-tab">
-      <div class="card-box">
-         <label>選擇產品編輯:</label>
-         <div style="display:flex; gap:5px; align-items:center;">
-           <select id="productSelectB" onchange="loadBom('product')" style="margin-bottom:0;"></select>
-           <button class="w3-button w3-light-grey w3-border w3-round" onclick="openEditProductModal()" title="編輯產品資料"><i class="fas fa-pencil-alt"></i></button>
-         </div>
-         <hr>
-         <div class="w3-row">
-            <div class="w3-col s6" style="padding-right:5px">
-               <button class="w3-button w3-green w3-small w3-round w3-block" onclick="openCreateProductModal()">+ 建立新產品</button>
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6">
+                  <label>國家:</label><input type="text" id="storeCountry">
+                </div>
+                <div class="w3-col s6">
+                  <label>城市:</label><input type="text" id="storeCity">
+                </div>
+                <div class="w3-col s6">
+                  <label>區域:</label><input type="text" id="storeDistrict">
+                </div>
+                <div class="w3-col s6">
+                  <label>狀態:</label>
+                  <select id="storeStatusSelect">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <label>中文地址:</label><input type="text" id="storeAddrTw">
+              <label>英文地址:</label><input type="text" id="storeAddrEn">
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6"><label>緯度:</label><input type="text" id="storeLat"></div>
+                <div class="w3-col s6"><label>經度:</label><input type="text" id="storeLng"></div>
+              </div>
+              
+              <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveStoreDetails()">
+                <i class="fas fa-save"></i> 儲存變更
+              </button>
+              <div id="storeSaveMsg" class="w3-small w3-text-green" style="display:none; margin-top:8px;"></div>
             </div>
-            <div class="w3-col s6" style="padding-left:5px">
-               <button class="w3-button w3-orange w3-text-white w3-small w3-round w3-block" onclick="openCreateCategoryModal()">+ 新增類別</button>
+            <div id="storePlaceholder" class="w3-center w3-text-grey w3-padding-32">
+              <i class="fas fa-arrow-left"></i> 請從左側選擇一個門市
             </div>
-         </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ModuleE" class="tab-content" style="display:none">
+        <div class="w3-row">
+          <div class="w3-col m5 w3-padding-small">
+            <div class="w3-row-padding" style="margin:0 -8px">
+              <div class="w3-col s12">
+                <input type="text" id="invFilter" placeholder="搜尋 貨品代號 / 貨品名稱..." onkeyup="filterInventoryItems()">
+              </div>
+            </div>
+
+            <div id="invListContainer" class="card-box" style="min-height: 200px; padding:0;">
+              <div class="w3-center w3-padding w3-text-grey">載入中...</div>
+            </div>
+          </div>
+
+          <div class="w3-col m7 w3-padding-small">
+            <div class="card-box" id="invDetailArea" style="display:none;">
+              <div class="section-title">庫存細節</div>
+              <input type="hidden" id="selectedInvCode">
+
+              <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
+                <h4 id="selectedInvName" style="margin:0; font-size:1.1em"></h4>
+                <span id="selectedInvCodeDisplay" class="pos-details" style="display:block; margin-top:5px;"></span>
+              </div>
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6">
+                  <label>類別:</label><input type="text" id="invCategory">
+                </div>
+                <div class="w3-col s6">
+                  <label>排行:</label><input type="number" id="invRank">
+                </div>
+              </div>
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6">
+                  <label>貨品代號:</label><input type="text" id="invItemCode" readonly>
+                </div>
+                <div class="w3-col s6">
+                  <label>貨品名稱:</label><input type="text" id="invItemName" readonly>
+                </div>
+              </div>
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6">
+                  <label>單位:</label><input type="text" id="invUnit">
+                </div>
+                <div class="w3-col s6">
+                  <label>效期(天):</label><input type="number" id="invShelfLifeDays">
+                </div>
+              </div>
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6">
+                  <label>效期分類:</label><input type="text" id="invShelfLifeCategory">
+                </div>
+                <div class="w3-col s6">
+                  <label>銷度:</label><input type="text" id="invSalesGrade">
+                </div>
+              </div>
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s6">
+                  <label>交期(天):</label><input type="number" id="invLeadTimeDays">
+                </div>
+                <div class="w3-col s6">
+                  <label>配送:</label><input type="text" id="invDelivery">
+                </div>
+              </div>
+
+              <div class="w3-row-padding" style="margin:0 -8px">
+                <div class="w3-col s4">
+                  <label>最大進貨量參數:</label><input type="number" step="0.01" id="invMaxPurchaseParam">
+                </div>
+                <div class="w3-col s4">
+                  <label>安全庫存參數:</label><input type="number" step="0.01" id="invSafetyStockParam">
+                </div>
+                <div class="w3-col s4">
+                  <label>庫存週轉天數:</label><input type="number" step="0.01" id="invTurnoverDays">
+                </div>
+              </div>
+
+              <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveInventoryDetailE()">
+                <i class="fas fa-save"></i> 儲存變更
+              </button>
+            </div>
+
+            <div id="invPlaceholder" class="w3-center w3-text-grey w3-padding-32">
+              <i class="fas fa-arrow-left"></i> 請從左側選擇一個庫存品項
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div id="subSemi" class="sub-tab" style="display:none">
-      <div class="card-box w3-pale-yellow">
-        <label>選擇半成品編輯配方:</label>
-        <div style="display:flex; gap:5px;">
-           <select id="semiSelectB" onchange="loadBom('semi')"></select>
-        </div>
-        <small>僅顯示標記為「半成品」的食材。若需修改名稱請至[食材列表]。</small>
-      </div>
-    </div>
-    
-    <div id="subIngList" class="sub-tab" style="display:none">
-      <div class="card-box">
-        <input type="text" id="ingListSearch" placeholder="搜尋食材名稱..." onkeyup="renderIngList()">
-        <div class="w3-container w3-light-grey w3-padding-small w3-round" style="margin-bottom:10px;">
-          <span class="w3-small">共有 <b id="ingCount">0</b> 項食材</span>
-        </div>
-        <div id="ingListContainer" style="height: 400px; overflow-y: auto;"></div>
+    <div id="modalNewProduct" class="modal">
+      <div class="modal-content">
+        <span onclick="closeModal('modalNewProduct')" class="w3-button w3-display-topright">&times;</span>
+        <h3 id="prodModalTitle">建立新產品</h3>
+        <input type="hidden" id="editProdId">
+        <label>產品名稱:</label><input type="text" id="newProdName">
+        <label>產品類別:</label><select id="newProdCat"></select>
+        <button id="btnSaveProd" class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveProductData()">建立</button>
       </div>
     </div>
 
-    <div id="subIng" class="sub-tab" style="display:none">
-      <div class="card-box w3-pale-green">
-        <div class="section-title">建立新食材</div>
-        <label>食材名稱:</label><input type="text" id="newIngName">
+    <div id="modalNewCategory" class="modal">
+      <div class="modal-content">
+        <span onclick="closeModal('modalNewCategory')" class="w3-button w3-display-topright">&times;</span>
+        <h3>建立新產品類別</h3>
+        <label>類別名稱:</label><input type="text" id="newCatName">
+        <button class="w3-button w3-orange w3-text-white w3-block w3-margin-top w3-round" onclick="createCategory()">建立類別</button>
+      </div>
+    </div>
+
+    <div id="modalEditIngDetail" class="modal">
+      <div class="modal-content">
+        <span onclick="closeModal('modalEditIngDetail')" class="w3-button w3-display-topright">&times;</span>
+        <h3>編輯食材資訊</h3>
+        <input type="hidden" id="editIngId">
+        <label>食材名稱:</label><input type="text" id="editIngName">
         <label>來源:</label>
-        <select id="newIngSource"><option value="總部叫貨">總部叫貨</option><option value="自行採購">自行採購</option></select>
+        <select id="editIngSource"><option value="總部叫貨">總部叫貨</option><option value="自行採購">自行採購</option></select>
         <label>類型:</label>
-        <select id="newIngIsSemi"><option value="false">一般原物料</option><option value="true">半成品 (需製作)</option></select>
-        <button class="w3-button w3-dark-grey w3-block w3-round" onclick="createIngredient()">建立</button>
+        <select id="editIngIsSemi"><option value="false">一般原物料</option><option value="true">半成品 (需製作)</option></select>
+        <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveIngDetailData()">儲存修改</button>
       </div>
     </div>
 
-    <div id="subUnits" class="sub-tab" style="display:none">
-      <div class="card-box">
-        <div class="section-title">單位管理</div>
-        <div class="w3-row" style="margin-bottom:15px">
-          <div class="w3-col s9">
-            <input type="text" id="newUnitNameInput" placeholder="輸入新單位名稱 (如: 箱)..." style="margin-bottom:0">
-          </div>
-          <div class="w3-col s3" style="padding-left:10px">
-            <button class="w3-button w3-green w3-block w3-round" onclick="addUnit()">新增</button>
-          </div>
-        </div>
-        <div class="w3-container w3-light-grey w3-padding-small w3-round" style="margin-bottom:10px;">
-          <span class="w3-small">已建立單位列表 (點擊可修改):</span>
-        </div>
-        <div id="unitListContainer" style="height: 350px; overflow-y: auto;">
-           </div>
+    <div id="modalEditUnit" class="modal">
+      <div class="modal-content">
+        <span onclick="closeModal('modalEditUnit')" class="w3-button w3-display-topright">&times;</span>
+        <h3>修改單位名稱</h3>
+        <input type="hidden" id="editUnitId">
+        <label>單位名稱:</label><input type="text" id="editUnitName">
+        <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveUnitData()">儲存修改</button>
       </div>
     </div>
 
-    <div id="bomEditor" class="card-box" style="display:none; border-top: 4px solid #3498db; margin-top:15px;">
-      <h4 style="margin-top:0"><span id="bomTargetName"></span> 的配方表</h4>
-      <ul id="bomList" class="w3-ul w3-border w3-white"></ul>
-      <div class="w3-light-grey w3-padding w3-margin-top w3-round">
-        <label><i class="fas fa-plus"></i> 新增配方材料:</label>
-        <input type="text" id="bomIngSearch" placeholder="搜尋食材..." onkeyup="filterBomIngredients()">
-        <select id="bomIngSelect" size="3"></select>
-        <div class="w3-row-padding" style="margin:0 -8px">
-          <div class="w3-col s6"><input type="number" id="bomQty" placeholder="數量"></div>
-          <div class="w3-col s6"><select id="bomUnit"></select></div>
-        </div>
-        <button class="w3-button w3-blue w3-block w3-round" onclick="addToBom()">加入</button>
-      </div>
-    </div>
-  </div>
+    <script>
+      var G = {
+        posItems: [],
+        products: [],
+        ingredients: [],
+        units: [],
+        categories: [],
+        stores: [],
+        inventoryItems: [],
+        currentBomType: 'product',
+        currentBomItemId: null,
+        selectedErpUnitId: null,
+        erpSearchResults: []
+      };
 
-  <div id="ModuleC" class="tab-content" style="display:none">
-    <div class="card-box w3-pale-red">
-      <label>選擇食材:</label>
-      <div class="w3-row-padding" style="margin:0 -8px 8px -8px">
-         <div class="w3-col s12">
-           <select id="ingLinkFilterC" onchange="renderIngDropdownC()">
-             <option value="unlinked" selected>未連結 (預設)</option>
-             <option value="linked">已連結 (修改)</option>
-             <option value="all">全部食材</option>
-           </select>
-         </div>
-      </div>
-      <select id="ingSelectC" size="5" onchange="onIngChangeC()"></select>
-    </div>
+      function showLoading(b) { document.getElementById('loading').style.display = b?'flex':'none'; }
 
-    <div class="card-box">
-      <div class="section-title">1. 選擇 ERP 對應品項</div>
-      <input type="text" id="erpSearchC" placeholder="輸入 ERP 代號或名稱..." onkeyup="searchErpC()">
-      <select id="erpResultC" size="4" onchange="onSelectErpItem()"></select>
-      <div class="w3-text-grey w3-small" id="erpUnitHint"></div>
-
-      <div class="section-title w3-margin-top">2. 單位換算設定</div>
-      <div class="conv-grid">
-         <div class="conv-card">
-            <span class="conv-card-header w3-text-blue">步驟一：總倉收貨單位 (進大出小)</span>
-            <div class="conv-row">
-               <span>1</span>
-               <select id="whOutUnit" class="unit-sel" style="margin:0; width:auto; flex:1"></select>
-            </div>
-            <div class="conv-arrow"><i class="fas fa-arrow-down"></i> 內容含</div>
-            <div class="conv-row">
-               <input type="number" id="whOutQty" placeholder="數量" style="margin:0; width:80px">
-               <span id="whOutBaseUnitDisplay" class="fixed-tag">?</span>
-            </div>
-         </div>
-         <div class="conv-card">
-            <span class="conv-card-header w3-text-green">步驟二：門市使用單位 (拆封使用)</span>
-            <div class="conv-row">
-               <span>1</span>
-               <select id="whInUnit" class="unit-sel" style="margin:0; width:auto; flex:1"></select>
-            </div>
-            <div class="conv-arrow"><i class="fas fa-arrow-down"></i> 內容含</div>
-            <div class="conv-row">
-               <input type="number" id="whInQty" placeholder="數量" style="margin:0; width:80px">
-               <select id="whInBaseUnit" class="unit-sel" style="margin:0; width:auto; flex:1"></select>
-            </div>
-         </div>
-      </div>
-      <button class="w3-button w3-deep-orange w3-block w3-margin-top w3-round" onclick="saveInventoryLink()">確認連結並儲存</button>
-    </div>
-  </div>
-  <div id="ModuleD" class="tab-content" style="display:none">
-    <div class="w3-row">
-      <div class="w3-col m5 w3-padding-small">
-        <div class="w3-row-padding" style="margin:0 -8px">
-           <div class="w3-col s12">
-              <input type="text" id="storeFilter" placeholder="搜尋 ERP 門市名稱..." onkeyup="filterStores()">
-           </div>
-           <div class="w3-col s6">
-              <select id="storeStatusFilter" onchange="filterStores()">
-                <option value="active" selected>有效 (Active)</option>
-                <option value="inactive">無效 (Inactive)</option>
-                <option value="all">全部狀態</option>
-              </select>
-           </div>
-           <div class="w3-col s6">
-              <select id="storeLinkFilter" onchange="filterStores()">
-                <option value="all" selected>全部連結狀態</option>
-                <option value="linked">已連結 POS</option>
-                <option value="unlinked">未連結 POS</option>
-              </select>
-           </div>
-        </div>
+      function showToast_(msg, type) {
+        const el = document.getElementById('toast');
+        if (!el) return;
+        const t = type || 'success';
+        el.className = 'w3-panel w3-border ' + (t === 'error' ? 'w3-pale-red' : (t === 'warn' ? 'w3-pale-yellow' : 'w3-pale-green'));
+        el.textContent = msg || '';
+        el.style.display = 'block';
+        clearTimeout(el._t);
+        el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
+      }
+      
+      function switchTab(id, event) {
+        document.querySelectorAll('.tab-content').forEach(d=>d.style.display='none');
+        document.querySelectorAll('.tab-item').forEach(d=>d.classList.remove('active'));
+        document.getElementById(id).style.display='block';
+        if(event) event.currentTarget.classList.add('active');
         
-        <div id="storeListContainer" class="card-box" style="min-height: 200px; padding:0;">
-          <div class="w3-center w3-padding w3-text-grey">載入中...</div>
-        </div>
-      </div>
-      
-      <div class="w3-col m7 w3-padding-small">
-        <div class="card-box" id="storeDetailArea" style="display:none;">
-          <div class="section-title">門市詳細資料與綁定</div>
-          <input type="hidden" id="selectedStoreId">
-          
-          <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
-            <h4 id="selectedErpName" style="margin:0; font-size:1.1em"></h4>
-            <span id="selectedStoreType" class="w3-tag w3-blue w3-small w3-round" style="margin-top:5px;"></span>
-          </div>
-          
-          <label>綁定 POS 門市名稱:</label>
-          <div style="display:flex; gap:5px;">
-             <input type="text" id="posStoreNameInput" placeholder="輸入 POS 門市名稱">
-             <button class="w3-button w3-light-grey w3-border w3-round" onclick="clearPosStoreName()" title="清除"><i class="fas fa-times"></i></button>
-          </div>
-          <small class="w3-text-grey">請輸入對應的 POS 系統門市名稱</small>
-
-          <hr>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s6">
-              <label>國家:</label><input type="text" id="storeCountry">
-            </div>
-            <div class="w3-col s6">
-              <label>城市:</label><input type="text" id="storeCity">
-            </div>
-            <div class="w3-col s6">
-              <label>區域:</label><input type="text" id="storeDistrict">
-            </div>
-            <div class="w3-col s6">
-              <label>狀態:</label>
-              <select id="storeStatusSelect">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          <label>中文地址:</label><input type="text" id="storeAddrTw">
-          <label>英文地址:</label><input type="text" id="storeAddrEn">
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-             <div class="w3-col s6"><label>緯度:</label><input type="text" id="storeLat"></div>
-             <div class="w3-col s6"><label>經度:</label><input type="text" id="storeLng"></div>
-          </div>
-          
-          <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveStoreDetails()">
-            <i class="fas fa-save"></i> 儲存變更
-          </button>
-          <div id="storeSaveMsg" class="w3-small w3-text-green" style="display:none; margin-top:8px;"></div>
-        </div>
-        <div id="storePlaceholder" class="w3-center w3-text-grey w3-padding-32">
-          <i class="fas fa-arrow-left"></i> 請從左側選擇一個門市
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="ModuleE" class="tab-content" style="display:none">
-    <div class="w3-row">
-      <div class="w3-col m5 w3-padding-small">
-        <div class="w3-row-padding" style="margin:0 -8px">
-          <div class="w3-col s12">
-            <input type="text" id="invFilter" placeholder="搜尋 貨品代號 / 貨品名稱..." onkeyup="filterInventoryItems()">
-          </div>
-        </div>
-
-        <div id="invListContainer" class="card-box" style="min-height: 200px; padding:0;">
-          <div class="w3-center w3-padding w3-text-grey">載入中...</div>
-        </div>
-      </div>
-
-      <div class="w3-col m7 w3-padding-small">
-        <div class="card-box" id="invDetailArea" style="display:none;">
-          <div class="section-title">庫存細節</div>
-          <input type="hidden" id="selectedInvCode">
-
-          <div class="w3-light-grey w3-padding w3-margin-bottom w3-round">
-            <h4 id="selectedInvName" style="margin:0; font-size:1.1em"></h4>
-            <span id="selectedInvCodeDisplay" class="pos-details" style="display:block; margin-top:5px;"></span>
-          </div>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s6">
-              <label>類別:</label><input type="text" id="invCategory">
-            </div>
-            <div class="w3-col s6">
-              <label>排行:</label><input type="number" id="invRank">
-            </div>
-          </div>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s6">
-              <label>貨品代號:</label><input type="text" id="invItemCode" readonly>
-            </div>
-            <div class="w3-col s6">
-              <label>貨品名稱:</label><input type="text" id="invItemName" readonly>
-            </div>
-          </div>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s6">
-              <label>單位:</label><input type="text" id="invUnit">
-            </div>
-            <div class="w3-col s6">
-              <label>效期(天):</label><input type="number" id="invShelfLifeDays">
-            </div>
-          </div>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s6">
-              <label>效期分類:</label><input type="text" id="invShelfLifeCategory">
-            </div>
-            <div class="w3-col s6">
-              <label>銷度:</label><input type="text" id="invSalesGrade">
-            </div>
-          </div>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s6">
-              <label>交期(天):</label><input type="number" id="invLeadTimeDays">
-            </div>
-            <div class="w3-col s6">
-              <label>配送:</label><input type="text" id="invDelivery">
-            </div>
-          </div>
-
-          <div class="w3-row-padding" style="margin:0 -8px">
-            <div class="w3-col s4">
-              <label>最大進貨量參數:</label><input type="number" step="0.01" id="invMaxPurchaseParam">
-            </div>
-            <div class="w3-col s4">
-              <label>安全庫存參數:</label><input type="number" step="0.01" id="invSafetyStockParam">
-            </div>
-            <div class="w3-col s4">
-              <label>庫存週轉天數:</label><input type="number" step="0.01" id="invTurnoverDays">
-            </div>
-          </div>
-
-          <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveInventoryDetailE()">
-            <i class="fas fa-save"></i> 儲存變更
-          </button>
-        </div>
-
-        <div id="invPlaceholder" class="w3-center w3-text-grey w3-padding-32">
-          <i class="fas fa-arrow-left"></i> 請從左側選擇一個庫存品項
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="modalNewProduct" class="modal">
-  <div class="modal-content">
-    <span onclick="closeModal('modalNewProduct')" class="w3-button w3-display-topright">&times;</span>
-    <h3 id="prodModalTitle">建立新產品</h3>
-    <input type="hidden" id="editProdId">
-    <label>產品名稱:</label><input type="text" id="newProdName">
-    <label>產品類別:</label><select id="newProdCat"></select>
-    <button id="btnSaveProd" class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveProductData()">建立</button>
-  </div>
-</div>
-
-<div id="modalNewCategory" class="modal">
-  <div class="modal-content">
-    <span onclick="closeModal('modalNewCategory')" class="w3-button w3-display-topright">&times;</span>
-    <h3>建立新產品類別</h3>
-    <label>類別名稱:</label><input type="text" id="newCatName">
-    <button class="w3-button w3-orange w3-text-white w3-block w3-margin-top w3-round" onclick="createCategory()">建立類別</button>
-  </div>
-</div>
-
-<div id="modalEditIngDetail" class="modal">
-  <div class="modal-content">
-    <span onclick="closeModal('modalEditIngDetail')" class="w3-button w3-display-topright">&times;</span>
-    <h3>編輯食材資訊</h3>
-    <input type="hidden" id="editIngId">
-    <label>食材名稱:</label><input type="text" id="editIngName">
-    <label>來源:</label>
-    <select id="editIngSource"><option value="總部叫貨">總部叫貨</option><option value="自行採購">自行採購</option></select>
-    <label>類型:</label>
-    <select id="editIngIsSemi"><option value="false">一般原物料</option><option value="true">半成品 (需製作)</option></select>
-    <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveIngDetailData()">儲存修改</button>
-  </div>
-</div>
-
-<div id="modalEditUnit" class="modal">
-  <div class="modal-content">
-    <span onclick="closeModal('modalEditUnit')" class="w3-button w3-display-topright">&times;</span>
-    <h3>修改單位名稱</h3>
-    <input type="hidden" id="editUnitId">
-    <label>單位名稱:</label><input type="text" id="editUnitName">
-    <button class="w3-button w3-blue w3-block w3-margin-top w3-round" onclick="saveUnitData()">儲存修改</button>
-  </div>
-</div>
-
-<script>
-  var G = {
-    posItems: [],
-    products: [],
-    ingredients: [],
-    units: [],
-    categories: [],
-    stores: [],
-    inventoryItems: [],
-    currentBomType: 'product',
-    currentBomItemId: null,
-    selectedErpUnitId: null,
-    erpSearchResults: []
-  };
-
-  function showLoading(b) { document.getElementById('loading').style.display = b?'flex':'none'; }
-
-  function showToast_(msg, type) {
-    const el = document.getElementById('toast');
-    if (!el) return;
-    const t = type || 'success';
-    el.className = 'w3-panel w3-border ' + (t === 'error' ? 'w3-pale-red' : (t === 'warn' ? 'w3-pale-yellow' : 'w3-pale-green'));
-    el.textContent = msg || '';
-    el.style.display = 'block';
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
-  }
-  
-  function switchTab(id, event) {
-    document.querySelectorAll('.tab-content').forEach(d=>d.style.display='none');
-    document.querySelectorAll('.tab-item').forEach(d=>d.classList.remove('active'));
-    document.getElementById(id).style.display='block';
-    if(event) event.currentTarget.classList.add('active');
-    
-    if(id==='ModuleA') loadModuleA();
-    if(id==='ModuleB') loadModuleB();
-    if(id==='ModuleC') loadModuleC();
-    if(id==='ModuleD') loadModuleD();
-    if(id==='ModuleE') loadModuleE();
-  }
-  
-  function toggleSubTab(id, btn) {
-    document.querySelectorAll('.sub-tab').forEach(d=>d.style.display='none');
-    document.getElementById(id).style.display='block';
-    document.getElementById('bomEditor').style.display='none';
-    
-    let btns = btn.parentNode.getElementsByTagName('button');
-    for(let b of btns) b.className = b.className.replace(" w3-dark-grey", "");
-    btn.className += " w3-dark-grey";
-    if(id === 'subIngList') renderIngList();
-    if(id === 'subUnits') renderUnitList();
-  }
-  
-  function openModal(id) { document.getElementById(id).style.display='block'; }
-  function closeModal(id) { document.getElementById(id).style.display='none'; }
-
-  // ================= MODULE A =================
-  function loadModuleA() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.posItems = data.posItems;
-      G.products = data.products;
-      renderPosList();
-      showLoading(false);
-    }).getModuleAData();
-  }
-  function filterPosItems() { renderPosList(); }
-  
-  function renderPosList() {
-    const txt = (document.getElementById('posFilter').value || "").toLowerCase();
-    const statusFilter = document.getElementById('posStatusFilter').value;
-    const linkFilter = document.getElementById('posLinkFilter').value;
-    const container = document.getElementById('posListContainer');
-    container.innerHTML = '';
-    
-    if(!G.posItems) { container.innerHTML = '<div class="w3-center">No Data</div>'; return; }
-
-    const filtered = G.posItems.filter(p => {
-      const matchTxt = ((p.pos_item_name||"")+(p.pos_option_group||"")+(p.pos_option_name||"")).toLowerCase().includes(txt);
-      const matchStatus = statusFilter === 'all' || (p.status||"有效") === statusFilter;
-      const isLinked = p.mapped_product_ids && p.mapped_product_ids.length > 0;
-      const matchLink = linkFilter === 'all' || (linkFilter === 'linked' ? isLinked : !isLinked);
-      return matchTxt && matchStatus && matchLink;
-    });
-
-    filtered.forEach(p => {
-      const status = p.status || "有效";
-      const statusClass = status === '有效' ? 'status-valid' : 'status-invalid';
-      const optionDisplay = p.pos_option_name ? `${p.pos_option_group} : ${p.pos_option_name}` : p.pos_option_group;
-      
-      let div = document.createElement('div');
-      div.className = 'pos-item-row';
-      div.innerHTML = `
-        <div onclick="selectPosItem(${p.pos_item_id})" style="flex:1; cursor:pointer;">
-          <div style="font-weight:bold">${p.pos_item_name}</div>
-          <div class="pos-details">${optionDisplay || '-'}</div>
-        </div>
-        <div style="text-align:right">
-           <span class="status-badge ${statusClass}" onclick="togglePosStatus(${p.pos_item_id}, '${status}')">${status}</span>
-           <div>${p.mapped_product_ids.length > 0 ? '<i class="fas fa-link w3-text-green"></i>' : '<i class="fas fa-exclamation-circle w3-text-red"></i>'}</div>
-        </div>`;
-      container.appendChild(div);
-    });
-  }
-  function togglePosStatus(id, stat) {
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => { G.posItems = data.posItems; renderPosList(); showLoading(false); }).updatePosStatus(id, stat==='有效'?'無效':'有效');
-  }
-  function selectPosItem(id) {
-    const p = G.posItems.find(x => x.pos_item_id === id);
-    if(!p) return;
-    document.getElementById('mappingArea').style.display='block';
-    document.getElementById('mappingPlaceholder').style.display='none';
-    document.getElementById('selectedPosName').innerText = p.pos_item_name;
-    document.getElementById('selectedPosDetail').innerText = p.pos_option_name ? `${p.pos_option_group} : ${p.pos_option_name}` : p.pos_option_group;
-    document.getElementById('selectedPosName').dataset.id = p.pos_item_id;
-    const container = document.getElementById('productSelectsContainer');
-    container.innerHTML = '';
-    for(let i=0; i<5; i++) {
-      let sel = document.createElement('select');
-      sel.id = `mapProd_${i}`;
-      sel.innerHTML = '<option value="">(無)</option>';
-      G.products.forEach(prod => sel.add(new Option(prod.product_name, prod.product_id)));
-      if(p.mapped_product_ids[i]) sel.value = p.mapped_product_ids[i];
-      container.appendChild(sel);
-    }
-  }
-  function saveMapping() {
-    const posId = document.getElementById('selectedPosName').dataset.id;
-    let prodIds = [];
-    for(let i=0; i<5; i++) { let val = document.getElementById(`mapProd_${i}`).value; if(val) prodIds.push(val); }
-    showLoading(true);
-    google.script.run.withSuccessHandler(() => { showToast_('已儲存'); loadModuleA(); }).savePosMapping(posId, prodIds);
-  }
-
-  // ================= MODULE B =================
-  function loadModuleB() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.products = data.products;
-      G.categories = data.categories;
-      G.semiProducts = data.semiProducts;
-      G.ingredients = data.ingredients; 
-      G.units = data.units;
-      updateBSelects();
-      const cSel = document.getElementById('newProdCat');
-      cSel.innerHTML = '';
-      data.categories.forEach(c => cSel.add(new Option(c.category_name, c.category_id)));
-      showLoading(false);
-    }).getModuleBData();
-  }
-  function updateBSelects() {
-    const pSel = document.getElementById('productSelectB');
-    const oldP = pSel.value;
-    pSel.innerHTML = '<option value="">-- 請選擇產品 --</option>';
-    G.products.forEach(p => pSel.add(new Option(p.product_name, p.product_id)));
-    if(oldP) pSel.value = oldP;
-
-    const sSel = document.getElementById('semiSelectB');
-    const oldS = sSel.value;
-    sSel.innerHTML = '<option value="">-- 請選擇半成品 --</option>';
-    G.semiProducts.forEach(s => sSel.add(new Option(s.ingredient_name, s.ingredient_id)));
-    if(oldS) sSel.value = oldS;
-  }
-  function renderIngList() {
-    const txt = (document.getElementById('ingListSearch').value || "").toLowerCase();
-    const container = document.getElementById('ingListContainer');
-    container.innerHTML = '';
-    let count = 0;
-    G.ingredients.filter(i => (i.ingredient_name||"").toLowerCase().includes(txt)).forEach(i => {
-       count++;
-       const isSemi = String(i.is_semi_product).toLowerCase() === 'true';
-       const typeTag = isSemi ? `<span class="ing-tag tag-semi">半成品</span>` : `<span class="ing-tag tag-raw">原物料</span>`;
-       const erpTag = i.erp_inventory_product_code ? `<br><span class="w3-tiny w3-text-grey"><i class="fas fa-barcode"></i> ERP: ${i.erp_inventory_product_code}</span>` : `<br><span class="w3-tiny w3-text-red">未對應 ERP</span>`;
-       let div = document.createElement('div');
-       div.className = 'ing-row';
-       div.innerHTML = `<div><div style="font-weight:bold">${i.ingredient_name}</div><div>${typeTag} <span class="ing-tag tag-source">${i.purchase_source||'-'}</span></div>${erpTag}</div>
-         <button class="w3-button w3-white w3-border w3-round w3-small" onclick="openEditIngDetailModal(${i.ingredient_id})">編輯</button>`;
-       container.appendChild(div);
-    });
-    document.getElementById('ingCount').innerText = count;
-  }
-  function openEditIngDetailModal(id) {
-    const ing = G.ingredients.find(i => i.ingredient_id === id);
-    document.getElementById('editIngId').value = ing.ingredient_id;
-    document.getElementById('editIngName').value = ing.ingredient_name;
-    document.getElementById('editIngSource').value = ing.purchase_source || "總部叫貨";
-    document.getElementById('editIngIsSemi').value = String(ing.is_semi_product).toLowerCase() === 'true' ? "true" : "false";
-    openModal('modalEditIngDetail');
-  }
-  function saveIngDetailData() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.ingredients = data.ingredients; G.semiProducts = data.semiProducts; updateBSelects(); renderIngList(); closeModal('modalEditIngDetail'); showLoading(false); showToast_('已儲存');
-    }).updateIngredientDetails(document.getElementById('editIngId').value, document.getElementById('editIngName').value, document.getElementById('editIngSource').value, document.getElementById('editIngIsSemi').value);
-  }
-  
-  function openCreateProductModal() {
-      document.getElementById('prodModalTitle').innerText = '建立新產品';
-      document.getElementById('btnSaveProd').innerText = '建立';
-      document.getElementById('editProdId').value = '';
-      document.getElementById('newProdName').value = '';
-      openModal('modalNewProduct');
-  }
-  
-  function openEditProductModal() {
-    const prodId = document.getElementById('productSelectB').value;
-    if(!prodId) { showToast_('請先選擇一個產品', 'warn'); return; }
-    const prod = G.products.find(p => String(p.product_id) === prodId);
-    
-    document.getElementById('prodModalTitle').innerText = '編輯產品'; 
-    document.getElementById('btnSaveProd').innerText = '儲存修改';   
-    document.getElementById('editProdId').value = prodId;
-    document.getElementById('newProdName').value = prod.product_name;
-    document.getElementById('newProdCat').value = prod.category_id;
-    openModal('modalNewProduct');
-  }
-
-  function saveProductData() {
-    const id = document.getElementById('editProdId').value;
-    const name = document.getElementById('newProdName').value;
-    const cat = document.getElementById('newProdCat').value;
-    if(!name) { showToast_('請輸入名稱', 'warn'); return; }
-    
-    showLoading(true);
-    if(id) {
-      google.script.run.withSuccessHandler(data => { afterProductSave(data); }).updateProduct(id, name, cat);
-    } else {
-      google.script.run.withSuccessHandler(data => { afterProductSave(data); }).createNewProduct(name, cat);
-    }
-  }
-
-  function afterProductSave(data) {
-    G.products = data.products; 
-    updateBSelects();
-    closeModal('modalNewProduct');
-    showLoading(false);
-  }
-
-  function openCreateCategoryModal() {
-    document.getElementById('newCatName').value = '';
-    openModal('modalNewCategory');
-  }
-  function createCategory() {
-    const name = document.getElementById('newCatName').value;
-    if(!name) { showToast_('名稱不可為空', 'warn'); return; }
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.categories = data.categories;
-      const cSel = document.getElementById('newProdCat');
-      cSel.innerHTML = '';
-      data.categories.forEach(c => cSel.add(new Option(c.category_name, c.category_id)));
-      closeModal('modalNewCategory');
-      showLoading(false);
-      showToast_('已建立');
-    }).createProductCategory(name);
-  }
-
-  function createIngredient() {
-     const name = document.getElementById('newIngName').value;
-      if(!name) { showToast_('名稱不可為空', 'warn'); return; }
-     showLoading(true);
-      google.script.run.withSuccessHandler(()=> {showToast_('已建立'); document.getElementById('newIngName').value=''; loadModuleB();}).createNewIngredient(name, document.getElementById('newIngSource').value, document.getElementById('newIngIsSemi').value);
-  }
-
-  // --- Units Management ---
-  function renderUnitList() {
-    const container = document.getElementById('unitListContainer');
-    container.innerHTML = '';
-    G.units.forEach(u => {
-      let div = document.createElement('div');
-      div.className = 'ing-row';
-      div.innerHTML = `<span>${u.unit_name}</span> <button class="w3-button w3-white w3-border w3-round w3-small" onclick="openEditUnit(${u.unit_id}, '${u.unit_name}')"><i class="fas fa-pen"></i></button>`;
-      container.appendChild(div);
-    });
-  }
-  function addUnit() {
-    const name = document.getElementById('newUnitNameInput').value;
-    if(!name) { showToast_('單位名稱不可為空', 'warn'); return; }
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.units = data.units;
-      renderUnitList();
-      document.getElementById('newUnitNameInput').value = '';
-      showLoading(false);
-    }).createUnit(name);
-  }
-  function openEditUnit(id, name) {
-    document.getElementById('editUnitId').value = id;
-    document.getElementById('editUnitName').value = name;
-    openModal('modalEditUnit');
-  }
-  function saveUnitData() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.units = data.units;
-      renderUnitList();
-      closeModal('modalEditUnit');
-      showLoading(false);
-    }).updateUnit(document.getElementById('editUnitId').value, document.getElementById('editUnitName').value);
-  }
-
-  function loadBom(type) {
-    G.currentBomType = type;
-    const selId = type === 'product' ? 'productSelectB' : 'semiSelectB';
-    const itemId = document.getElementById(selId).value;
-    if(!itemId) {
-      document.getElementById('bomEditor').style.display='none';
-      return;
-    }
-    const itemName = document.getElementById(selId).options[document.getElementById(selId).selectedIndex].text;
-    G.currentBomItemId = itemId;
-    document.getElementById('bomTargetName').innerText = itemName;
-    document.getElementById('bomEditor').style.display='block';
-    
-    showLoading(true);
-    google.script.run.withSuccessHandler(renderBom).getBomDetail(itemId, type);
-  }
-
-  function renderBom(data) {
-    showLoading(false);
-    G.ingredients = data.ingredients; 
-    G.units = data.units;
-    const list = document.getElementById('bomList');
-    list.innerHTML = '';
-    data.bom.forEach(b => {
-      let li = document.createElement('li');
-      li.className = 'w3-display-container';
-      li.innerHTML = `${b.ingredient_name} <span class="w3-tag w3-light-grey w3-round">${b.quantity} ${b.unit_name}</span> 
-                      <span onclick="removeBomItem(${b.bom_id})" class="w3-button w3-display-right w3-hover-red">&times;</span>`;
-      list.appendChild(li);
-    });
-    const uSel = document.getElementById('bomUnit');
-    uSel.innerHTML = '';
-    data.units.forEach(u => uSel.add(new Option(u.unit_name, u.unit_id)));
-    filterBomIngredients();
-  }
-
-  function filterBomIngredients() {
-    const txt = (document.getElementById('bomIngSearch').value || "").toLowerCase();
-    const sel = document.getElementById('bomIngSelect');
-    sel.innerHTML = '';
-    G.ingredients.filter(i => (i.ingredient_name||"").toLowerCase().includes(txt)).slice(0, 50)
-      .forEach(i => sel.add(new Option(i.ingredient_name, i.ingredient_id)));
-  }
-
-  function addToBom() {
-    const ingId = document.getElementById('bomIngSelect').value;
-    const qty = document.getElementById('bomQty').value;
-    const unitId = document.getElementById('bomUnit').value;
-    if(!ingId || !qty) { showToast_('請填寫完整', 'warn'); return; }
-    showLoading(true);
-    google.script.run.withSuccessHandler(renderBom).addBomItem(G.currentBomItemId, G.currentBomType, ingId, qty, unitId);
-  }
-
-  function removeBomItem(bomId) {
-    if(!confirm('確定刪除?')) return;
-    showLoading(true);
-    google.script.run.withSuccessHandler(renderBom).removeBomItem(bomId, G.currentBomItemId, G.currentBomType);
-  }
-
-  // ================= MODULE C =================
-  function loadModuleC() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(data => {
-      G.ingredients = data.ingredients; 
-      G.units = data.units;
-      renderIngDropdownC(); 
-      const unitSels = document.querySelectorAll('.unit-sel');
-      unitSels.forEach(s => { s.innerHTML = ''; data.units.forEach(u => s.add(new Option(u.unit_name, u.unit_id))); });
-      showLoading(false);
-    }).getModuleCData();
-  }
-
-  function renderIngDropdownC() {
-    const filter = document.getElementById('ingLinkFilterC').value;
-    const sel = document.getElementById('ingSelectC');
-    sel.innerHTML = '';
-    
-    G.ingredients.forEach(i => {
-      const isLinked = !!i.erp_inventory_product_code;
-      let show = false;
-      if(filter === 'all') show = true;
-      if(filter === 'linked' && isLinked) show = true;
-      if(filter === 'unlinked' && !isLinked) show = true;
-      
-      if(show) {
-        let opt = document.createElement('option');
-        opt.value = i.ingredient_id;
-        opt.text = (isLinked ? "✅ " : "🔴 ") + i.ingredient_name;
-        opt.dataset.erpCode = i.erp_inventory_product_code || "";
-        sel.add(opt);
+        if(id==='ModuleA') loadModuleA();
+        if(id==='ModuleB') loadModuleB();
+        if(id==='ModuleC') loadModuleC();
+        if(id==='ModuleD') loadModuleD();
+        if(id==='ModuleE') loadModuleE();
       }
-    });
-  }
-
-  function onIngChangeC() {
-    const sel = document.getElementById('ingSelectC');
-    const opt = sel.options[sel.selectedIndex];
-    if(!opt) return;
-    const erpCode = opt.dataset.erpCode;
-    document.getElementById('erpResultC').innerHTML = '';
-    document.getElementById('erpSearchC').value = '';
-    document.getElementById('whOutQty').value = '';
-    document.getElementById('whInQty').value = '';
-    
-    if(erpCode) {
-       document.getElementById('erpSearchC').value = erpCode;
-       searchErpC(erpCode, true);
-    }
-  }
-
-  function searchErpC(query, autoSelect = false) {
-    const txt = query || document.getElementById('erpSearchC').value;
-    if(txt.length < 2) return;
-    google.script.run.withSuccessHandler(items => {
-      G.erpSearchResults = items; 
-      const sel = document.getElementById('erpResultC');
-      sel.innerHTML = '';
       
-      let matchIndex = -1;
-      items.forEach((e, idx) => {
-        let opt = document.createElement('option');
-        opt.value = e.product_code;
-        opt.text = `[${e.product_code}] ${e.erp_inventory_name}`;
-        opt.dataset.index = idx; 
-        sel.add(opt);
-        if(String(e.product_code) === String(txt)) matchIndex = idx;
-      });
-      
-      if(autoSelect && matchIndex !== -1) {
-         sel.selectedIndex = matchIndex;
-         onSelectErpItem();
+      function toggleSubTab(id, btn) {
+        document.querySelectorAll('.sub-tab').forEach(d=>d.style.display='none');
+        document.getElementById(id).style.display='block';
+        document.getElementById('bomEditor').style.display='none';
+        
+        let btns = btn.parentNode.getElementsByTagName('button');
+        for(let b of btns) b.className = b.className.replace(" w3-dark-grey", "");
+        btn.className += " w3-dark-grey";
+        if(id === 'subIngList') renderIngList();
+        if(id === 'subUnits') renderUnitList();
       }
-    }).searchErpInventory(txt);
-  }
+      
+      function openModal(id) { document.getElementById(id).style.display='block'; }
+      
+      function closeModal(id) { document.getElementById(id).style.display='none'; }
 
-  function onSelectErpItem() {
-    const sel = document.getElementById('erpResultC');
-    const opt = sel.options[sel.selectedIndex];
-    if(!opt) return;
-    const itemData = G.erpSearchResults[opt.dataset.index];
-    G.selectedErpUnitId = itemData.inventory_unit_id;
-    document.getElementById('erpUnitHint').innerText = `ERP 庫存單位: ${itemData.unit_name}`;
-    document.getElementById('whOutBaseUnitDisplay').innerText = itemData.unit_name;
-    const ex = itemData.existing_conversion;
-    if(ex) {
-       document.getElementById('whOutUnit').value = ex.warehouse_out_unit_id;
-       document.getElementById('whOutQty').value = ex.warehouse_out_quantity;
-       document.getElementById('whInUnit').value = ex.warehouse_in_unit_id;
-       document.getElementById('whInQty').value = ex.warehouse_in_quantity;
-       document.getElementById('whInBaseUnit').value = ex.warehouse_in_base_unit_id;
-    }
-  }
+      // ================= MODULE A =================
+      function loadModuleA() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.posItems = data.posItems;
+          G.products = data.products;
+          renderPosList();
+          showLoading(false);
+        }).getModuleAData();
+      }
+      function filterPosItems() { renderPosList(); }
+      
+      function renderPosList() {
+        const txt = (document.getElementById('posFilter').value || "").toLowerCase();
+        const statusFilter = document.getElementById('posStatusFilter').value;
+        const linkFilter = document.getElementById('posLinkFilter').value;
+        const container = document.getElementById('posListContainer');
+        container.innerHTML = '';
+        
+        if(!G.posItems) { container.innerHTML = '<div class="w3-center">No Data</div>'; return; }
 
-  function saveInventoryLink() {
-    const ingId = document.getElementById('ingSelectC').value; 
-    const erpCode = document.getElementById('erpResultC').value;
-    if(!ingId || !erpCode) { showToast_('請選擇食材與 ERP 品項', 'warn'); return; }
-    const form = {
-      ingredientId: ingId,
-      erpProductCode: erpCode,
-      erpInvUnitId: G.selectedErpUnitId,
-      whOutUnit: document.getElementById('whOutUnit').value,
-      whOutQty: document.getElementById('whOutQty').value,
-      whInUnit: document.getElementById('whInUnit').value,
-      whInQty: document.getElementById('whInQty').value,
-      whInBaseUnit: document.getElementById('whInBaseUnit').value
-    };
-    if(!form.whOutQty || !form.whInQty) { showToast_('請輸入換算數量', 'warn'); return; }
-    showLoading(true);
-    google.script.run.withSuccessHandler(() => {
-      showToast_('已儲存');
-      loadModuleC();
-    }).linkIngredientComplex(form);
-  }
+        const filtered = G.posItems.filter(p => {
+          const matchTxt = ((p.pos_item_name||"")+(p.pos_option_group||"")+(p.pos_option_name||"")).toLowerCase().includes(txt);
+          const matchStatus = statusFilter === 'all' || (p.status||"有效") === statusFilter;
+          const isLinked = p.mapped_product_ids && p.mapped_product_ids.length > 0;
+          const matchLink = linkFilter === 'all' || (linkFilter === 'linked' ? isLinked : !isLinked);
+          return matchTxt && matchStatus && matchLink;
+        });
 
-  // ================= MODULE D =================
-  function loadModuleD() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(items => {
-      G.stores = items || [];
-      renderStoreList();
-      showLoading(false);
-    }).getModuleDData();
-  }
+        filtered.forEach(p => {
+          const status = p.status || "有效";
+          const statusClass = status === '有效' ? 'status-valid' : 'status-invalid';
+          const optionDisplay = p.pos_option_name ? `${p.pos_option_group} : ${p.pos_option_name}` : p.pos_option_group;
+          
+          let div = document.createElement('div');
+          div.className = 'pos-item-row';
+          div.innerHTML = `
+            <div onclick="selectPosItem(${p.pos_item_id})" style="flex:1; cursor:pointer;">
+              <div style="font-weight:bold">${p.pos_item_name}</div>
+              <div class="pos-details">${optionDisplay || '-'}</div>
+            </div>
+            <div style="text-align:right">
+              <span class="status-badge ${statusClass}" onclick="togglePosStatus(${p.pos_item_id}, '${status}')">${status}</span>
+              <div>${p.mapped_product_ids.length > 0 ? '<i class="fas fa-link w3-text-green"></i>' : '<i class="fas fa-exclamation-circle w3-text-red"></i>'}</div>
+            </div>`;
+          container.appendChild(div);
+        });
+      }
+      function togglePosStatus(id, stat) {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => { G.posItems = data.posItems; renderPosList(); showLoading(false); }).updatePosStatus(id, stat==='有效'?'無效':'有效');
+      }
+      function selectPosItem(id) {
+        const p = G.posItems.find(x => x.pos_item_id === id);
+        if(!p) return;
+        document.getElementById('mappingArea').style.display='block';
+        document.getElementById('mappingPlaceholder').style.display='none';
+        document.getElementById('selectedPosName').innerText = p.pos_item_name;
+        document.getElementById('selectedPosDetail').innerText = p.pos_option_name ? `${p.pos_option_group} : ${p.pos_option_name}` : p.pos_option_group;
+        document.getElementById('selectedPosName').dataset.id = p.pos_item_id;
+        const container = document.getElementById('productSelectsContainer');
+        container.innerHTML = '';
+        for(let i=0; i<5; i++) {
+          let sel = document.createElement('select');
+          sel.id = `mapProd_${i}`;
+          sel.innerHTML = '<option value="">(無)</option>';
+          G.products.forEach(prod => sel.add(new Option(prod.product_name, prod.product_id)));
+          if(p.mapped_product_ids[i]) sel.value = p.mapped_product_ids[i];
+          container.appendChild(sel);
+        }
+      }
+      function saveMapping() {
+        const posId = document.getElementById('selectedPosName').dataset.id;
+        let prodIds = [];
+        for(let i=0; i<5; i++) { let val = document.getElementById(`mapProd_${i}`).value; if(val) prodIds.push(val); }
+        showLoading(true);
+        google.script.run.withSuccessHandler(() => { showToast_('已儲存'); loadModuleA(); }).savePosMapping(posId, prodIds);
+      }
 
-  function filterStores() { renderStoreList(); }
+      // ================= MODULE B =================
+      function loadModuleB() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.products = data.products;
+          G.categories = data.categories;
+          G.semiProducts = data.semiProducts;
+          G.ingredients = data.ingredients; 
+          G.units = data.units;
+          updateBSelects();
+          const cSel = document.getElementById('newProdCat');
+          cSel.innerHTML = '';
+          data.categories.forEach(c => cSel.add(new Option(c.category_name, c.category_id)));
+          showLoading(false);
+        }).getModuleBData();
+      }
+      function updateBSelects() {
+        const pSel = document.getElementById('productSelectB');
+        const oldP = pSel.value;
+        pSel.innerHTML = '<option value="">-- 請選擇產品 --</option>';
+        G.products.forEach(p => pSel.add(new Option(p.product_name, p.product_id)));
+        if(oldP) pSel.value = oldP;
 
-  function renderStoreList() {
-    const container = document.getElementById('storeListContainer');
-    if (!container) return;
+        const sSel = document.getElementById('semiSelectB');
+        const oldS = sSel.value;
+        sSel.innerHTML = '<option value="">-- 請選擇半成品 --</option>';
+        G.semiProducts.forEach(s => sSel.add(new Option(s.ingredient_name, s.ingredient_id)));
+        if(oldS) sSel.value = oldS;
+      }
+      function renderIngList() {
+        const txt = (document.getElementById('ingListSearch').value || "").toLowerCase();
+        const container = document.getElementById('ingListContainer');
+        container.innerHTML = '';
+        let count = 0;
+        G.ingredients.filter(i => (i.ingredient_name||"").toLowerCase().includes(txt)).forEach(i => {
+          count++;
+          const isSemi = String(i.is_semi_product).toLowerCase() === 'true';
+          const typeTag = isSemi ? `<span class="ing-tag tag-semi">半成品</span>` : `<span class="ing-tag tag-raw">原物料</span>`;
+          const erpTag = i.erp_inventory_product_code ? `<br><span class="w3-tiny w3-text-grey"><i class="fas fa-barcode"></i> ERP: ${i.erp_inventory_product_code}</span>` : `<br><span class="w3-tiny w3-text-red">未對應 ERP</span>`;
+          let div = document.createElement('div');
+          div.className = 'ing-row';
+          div.innerHTML = `<div><div style="font-weight:bold">${i.ingredient_name}</div><div>${typeTag} <span class="ing-tag tag-source">${i.purchase_source||'-'}</span></div>${erpTag}</div>
+            <button class="w3-button w3-white w3-border w3-round w3-small" onclick="openEditIngDetailModal(${i.ingredient_id})">編輯</button>`;
+          container.appendChild(div);
+        });
+        document.getElementById('ingCount').innerText = count;
+      }
+      function openEditIngDetailModal(id) {
+        const ing = G.ingredients.find(i => i.ingredient_id === id);
+        document.getElementById('editIngId').value = ing.ingredient_id;
+        document.getElementById('editIngName').value = ing.ingredient_name;
+        document.getElementById('editIngSource').value = ing.purchase_source || "總部叫貨";
+        document.getElementById('editIngIsSemi').value = String(ing.is_semi_product).toLowerCase() === 'true' ? "true" : "false";
+        openModal('modalEditIngDetail');
+      }
+      function saveIngDetailData() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.ingredients = data.ingredients; G.semiProducts = data.semiProducts; updateBSelects(); renderIngList(); closeModal('modalEditIngDetail'); showLoading(false); showToast_('已儲存');
+        }).updateIngredientDetails(document.getElementById('editIngId').value, document.getElementById('editIngName').value, document.getElementById('editIngSource').value, document.getElementById('editIngIsSemi').value);
+      }
+      
+      function openCreateProductModal() {
+          document.getElementById('prodModalTitle').innerText = '建立新產品';
+          document.getElementById('btnSaveProd').innerText = '建立';
+          document.getElementById('editProdId').value = '';
+          document.getElementById('newProdName').value = '';
+          openModal('modalNewProduct');
+      }
+      
+      function openEditProductModal() {
+        const prodId = document.getElementById('productSelectB').value;
+        if(!prodId) { showToast_('請先選擇一個產品', 'warn'); return; }
+        const prod = G.products.find(p => String(p.product_id) === prodId);
+        
+        document.getElementById('prodModalTitle').innerText = '編輯產品'; 
+        document.getElementById('btnSaveProd').innerText = '儲存修改';   
+        document.getElementById('editProdId').value = prodId;
+        document.getElementById('newProdName').value = prod.product_name;
+        document.getElementById('newProdCat').value = prod.category_id;
+        openModal('modalNewProduct');
+      }
 
-    const txt = (document.getElementById('storeFilter').value || '').toLowerCase();
-    const statusFilter = document.getElementById('storeStatusFilter').value;
-    const linkFilter = document.getElementById('storeLinkFilter').value;
+      function saveProductData() {
+        const id = document.getElementById('editProdId').value;
+        const name = document.getElementById('newProdName').value;
+        const cat = document.getElementById('newProdCat').value;
+        if(!name) { showToast_('請輸入名稱', 'warn'); return; }
+        
+        showLoading(true);
+        if(id) {
+          google.script.run.withSuccessHandler(data => { afterProductSave(data); }).updateProduct(id, name, cat);
+        } else {
+          google.script.run.withSuccessHandler(data => { afterProductSave(data); }).createNewProduct(name, cat);
+        }
+      }
 
-    container.innerHTML = '';
-    if(!G.stores || G.stores.length === 0) {
-      container.innerHTML = '<div class="w3-center">No Data</div>';
-      return;
-    }
+      function afterProductSave(data) {
+        G.products = data.products; 
+        updateBSelects();
+        closeModal('modalNewProduct');
+        showLoading(false);
+      }
 
-    const filtered = G.stores.filter(s => {
-      const matchTxt = String(s.erp_customer_name || '').toLowerCase().includes(txt);
-      const matchStatus = statusFilter === 'all' || String(s.store_status || 'active') === statusFilter;
-      const isLinked = !!s.pos_store_name;
-      const matchLink = linkFilter === 'all' || (linkFilter === 'linked' ? isLinked : !isLinked);
-      return matchTxt && matchStatus && matchLink;
-    });
+      function openCreateCategoryModal() {
+        document.getElementById('newCatName').value = '';
+        openModal('modalNewCategory');
+      }
+      function createCategory() {
+        const name = document.getElementById('newCatName').value;
+        if(!name) { showToast_('名稱不可為空', 'warn'); return; }
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.categories = data.categories;
+          const cSel = document.getElementById('newProdCat');
+          cSel.innerHTML = '';
+          data.categories.forEach(c => cSel.add(new Option(c.category_name, c.category_id)));
+          closeModal('modalNewCategory');
+          showLoading(false);
+          showToast_('已建立');
+        }).createProductCategory(name);
+      }
 
-    filtered.forEach(s => {
-      const status = String(s.store_status || 'active');
-      const statusClass = status === 'active' ? 'status-valid' : 'status-invalid';
-      const isLinked = !!s.pos_store_name;
-      const storeId = String(s.id || '').trim();
+      function createIngredient() {
+        const name = document.getElementById('newIngName').value;
+          if(!name) { showToast_('名稱不可為空', 'warn'); return; }
+        showLoading(true);
+          google.script.run.withSuccessHandler(()=> {showToast_('已建立'); document.getElementById('newIngName').value=''; loadModuleB();}).createNewIngredient(name, document.getElementById('newIngSource').value, document.getElementById('newIngIsSemi').value);
+      }
 
-      let row = document.createElement('div');
-      row.className = 'pos-item-row';
+      // --- Units Management ---
+      function renderUnitList() {
+        const container = document.getElementById('unitListContainer');
+        container.innerHTML = '';
+        G.units.forEach(u => {
+          let div = document.createElement('div');
+          div.className = 'ing-row';
+          div.innerHTML = `<span>${u.unit_name}</span> <button class="w3-button w3-white w3-border w3-round w3-small" onclick="openEditUnit(${u.unit_id}, '${u.unit_name}')"><i class="fas fa-pen"></i></button>`;
+          container.appendChild(div);
+        });
+      }
+      function addUnit() {
+        const name = document.getElementById('newUnitNameInput').value;
+        if(!name) { showToast_('單位名稱不可為空', 'warn'); return; }
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.units = data.units;
+          renderUnitList();
+          document.getElementById('newUnitNameInput').value = '';
+          showLoading(false);
+        }).createUnit(name);
+      }
+      function openEditUnit(id, name) {
+        document.getElementById('editUnitId').value = id;
+        document.getElementById('editUnitName').value = name;
+        openModal('modalEditUnit');
+      }
+      function saveUnitData() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.units = data.units;
+          renderUnitList();
+          closeModal('modalEditUnit');
+          showLoading(false);
+        }).updateUnit(document.getElementById('editUnitId').value, document.getElementById('editUnitName').value);
+      }
 
-      let left = document.createElement('div');
-      left.style.flex = '1';
-      left.style.cursor = 'pointer';
-      left.innerHTML = `
-        <div style="font-weight:bold">${s.erp_customer_name || ''}</div>
-        <div class="pos-details">${s.pos_store_name ? s.pos_store_name : '<span class="w3-text-grey">(未綁定 POS)</span>'}</div>
-      `;
-      left.addEventListener('click', () => selectStore(storeId));
+      function loadBom(type) {
+        G.currentBomType = type;
+        const selId = type === 'product' ? 'productSelectB' : 'semiSelectB';
+        const itemId = document.getElementById(selId).value;
+        if(!itemId) {
+          document.getElementById('bomEditor').style.display='none';
+          return;
+        }
+        const itemName = document.getElementById(selId).options[document.getElementById(selId).selectedIndex].text;
+        G.currentBomItemId = itemId;
+        document.getElementById('bomTargetName').innerText = itemName;
+        document.getElementById('bomEditor').style.display='block';
+        
+        showLoading(true);
+        google.script.run.withSuccessHandler(renderBom).getBomDetail(itemId, type);
+      }
 
-      let right = document.createElement('div');
-      right.style.textAlign = 'right';
-      right.innerHTML = `
-        <span class="status-badge ${statusClass}">${status}</span>
-        <div>${isLinked ? '<i class="fas fa-link w3-text-green"></i>' : '<i class="fas fa-exclamation-circle w3-text-red"></i>'}</div>
-      `;
+      function renderBom(data) {
+        showLoading(false);
+        G.ingredients = data.ingredients; 
+        G.units = data.units;
+        const list = document.getElementById('bomList');
+        list.innerHTML = '';
+        data.bom.forEach(b => {
+          let li = document.createElement('li');
+          li.className = 'w3-display-container';
+          li.innerHTML = `${b.ingredient_name} <span class="w3-tag w3-light-grey w3-round">${b.quantity} ${b.unit_name}</span> 
+                          <span onclick="removeBomItem(${b.bom_id})" class="w3-button w3-display-right w3-hover-red">&times;</span>`;
+          list.appendChild(li);
+        });
+        const uSel = document.getElementById('bomUnit');
+        uSel.innerHTML = '';
+        data.units.forEach(u => uSel.add(new Option(u.unit_name, u.unit_id)));
+        filterBomIngredients();
+      }
 
-      row.appendChild(left);
-      row.appendChild(right);
-      container.appendChild(row);
-    });
-  }
+      function filterBomIngredients() {
+        const txt = (document.getElementById('bomIngSearch').value || "").toLowerCase();
+        const sel = document.getElementById('bomIngSelect');
+        sel.innerHTML = '';
+        G.ingredients.filter(i => (i.ingredient_name||"").toLowerCase().includes(txt)).slice(0, 50)
+          .forEach(i => sel.add(new Option(i.ingredient_name, i.ingredient_id)));
+      }
 
-  function selectStore(id) {
-    const s = (G.stores || []).find(x => String(x.id) === String(id));
-    if(!s) return;
+      function addToBom() {
+        const ingId = document.getElementById('bomIngSelect').value;
+        const qty = document.getElementById('bomQty').value;
+        const unitId = document.getElementById('bomUnit').value;
+        if(!ingId || !qty) { showToast_('請填寫完整', 'warn'); return; }
+        showLoading(true);
+        google.script.run.withSuccessHandler(renderBom).addBomItem(G.currentBomItemId, G.currentBomType, ingId, qty, unitId);
+      }
 
-    document.getElementById('storeDetailArea').style.display='block';
-    document.getElementById('storePlaceholder').style.display='none';
+      function removeBomItem(bomId) {
+        if(!confirm('確定刪除?')) return;
+        showLoading(true);
+        google.script.run.withSuccessHandler(renderBom).removeBomItem(bomId, G.currentBomItemId, G.currentBomType);
+      }
 
-    document.getElementById('selectedStoreId').value = s.id;
-    document.getElementById('selectedErpName').innerText = s.erp_customer_name || '';
-    document.getElementById('selectedStoreType').innerText = s.store_type || '';
+      // ================= MODULE C =================
+      function loadModuleC() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+          G.ingredients = data.ingredients; 
+          G.units = data.units;
+          renderIngDropdownC(); 
+          const unitSels = document.querySelectorAll('.unit-sel');
+          unitSels.forEach(s => { s.innerHTML = ''; data.units.forEach(u => s.add(new Option(u.unit_name, u.unit_id))); });
+          showLoading(false);
+        }).getModuleCData();
+      }
 
-    document.getElementById('posStoreNameInput').value = s.pos_store_name || '';
-    document.getElementById('storeCountry').value = s.country || '台灣';
-    document.getElementById('storeCity').value = s.city || '';
-    document.getElementById('storeDistrict').value = s.district || '';
-    document.getElementById('storeStatusSelect').value = s.store_status || 'active';
-    document.getElementById('storeAddrTw').value = s.address_zhtw || '';
-    document.getElementById('storeAddrEn').value = s.address_en || '';
-    document.getElementById('storeLat').value = (s.latitude === null || s.latitude === undefined) ? '' : String(s.latitude);
-    document.getElementById('storeLng').value = (s.longitude === null || s.longitude === undefined) ? '' : String(s.longitude);
-  }
+      function renderIngDropdownC() {
+        const filter = document.getElementById('ingLinkFilterC').value;
+        const sel = document.getElementById('ingSelectC');
+        sel.innerHTML = '';
+        
+        G.ingredients.forEach(i => {
+          const isLinked = !!i.erp_inventory_product_code;
+          let show = false;
+          if(filter === 'all') show = true;
+          if(filter === 'linked' && isLinked) show = true;
+          if(filter === 'unlinked' && !isLinked) show = true;
+          
+          if(show) {
+            let opt = document.createElement('option');
+            opt.value = i.ingredient_id;
+            opt.text = (isLinked ? "✅ " : "🔴 ") + i.ingredient_name;
+            opt.dataset.erpCode = i.erp_inventory_product_code || "";
+            sel.add(opt);
+          }
+        });
+      }
 
-  function clearPosStoreName() {
-    const el = document.getElementById('posStoreNameInput');
-    if (el) el.value = '';
-  }
+      function onIngChangeC() {
+        const sel = document.getElementById('ingSelectC');
+        const opt = sel.options[sel.selectedIndex];
+        if(!opt) return;
+        const erpCode = opt.dataset.erpCode;
+        document.getElementById('erpResultC').innerHTML = '';
+        document.getElementById('erpSearchC').value = '';
+        document.getElementById('whOutQty').value = '';
+        document.getElementById('whInQty').value = '';
+        
+        if(erpCode) {
+          document.getElementById('erpSearchC').value = erpCode;
+          searchErpC(erpCode, true);
+        }
+      }
 
-  function saveStoreDetails() {
-    const id = document.getElementById('selectedStoreId').value;
-    if(!id) return;
+      function searchErpC(query, autoSelect = false) {
+        const txt = query || document.getElementById('erpSearchC').value;
+        if(txt.length < 2) return;
+        google.script.run.withSuccessHandler(items => {
+          G.erpSearchResults = items; 
+          const sel = document.getElementById('erpResultC');
+          sel.innerHTML = '';
+          
+          let matchIndex = -1;
+          items.forEach((e, idx) => {
+            let opt = document.createElement('option');
+            opt.value = e.product_code;
+            opt.text = `[${e.product_code}] ${e.erp_inventory_name}`;
+            opt.dataset.index = idx; 
+            sel.add(opt);
+            if(String(e.product_code) === String(txt)) matchIndex = idx;
+          });
+          
+          if(autoSelect && matchIndex !== -1) {
+            sel.selectedIndex = matchIndex;
+            onSelectErpItem();
+          }
+        }).searchErpInventory(txt);
+      }
 
-    const form = {
-      id: id,
-      pos_store_name: document.getElementById('posStoreNameInput').value || null,
-      country: document.getElementById('storeCountry').value || null,
-      city: document.getElementById('storeCity').value || null,
-      district: document.getElementById('storeDistrict').value || null,
-      store_status: document.getElementById('storeStatusSelect').value || 'active',
-      address_zhtw: document.getElementById('storeAddrTw').value || null,
-      address_en: document.getElementById('storeAddrEn').value || null,
-      latitude: document.getElementById('storeLat').value || null,
-      longitude: document.getElementById('storeLng').value || null
-    };
+      function onSelectErpItem() {
+        const sel = document.getElementById('erpResultC');
+        const opt = sel.options[sel.selectedIndex];
+        if(!opt) return;
+        const itemData = G.erpSearchResults[opt.dataset.index];
+        G.selectedErpUnitId = itemData.inventory_unit_id;
+        document.getElementById('erpUnitHint').innerText = `ERP 庫存單位: ${itemData.unit_name}`;
+        document.getElementById('whOutBaseUnitDisplay').innerText = itemData.unit_name;
+        const ex = itemData.existing_conversion;
+        if(ex) {
+          document.getElementById('whOutUnit').value = ex.warehouse_out_unit_id;
+          document.getElementById('whOutQty').value = ex.warehouse_out_quantity;
+          document.getElementById('whInUnit').value = ex.warehouse_in_unit_id;
+          document.getElementById('whInQty').value = ex.warehouse_in_quantity;
+          document.getElementById('whInBaseUnit').value = ex.warehouse_in_base_unit_id;
+        }
+      }
 
-    showLoading(true);
-    google.script.run.withSuccessHandler(items => {
-      G.stores = items || [];
-      renderStoreList();
-      selectStore(id);
-      showLoading(false);
-      showStoreSaveMsg_('已儲存');
-    }).updateStoreDetails(form);
-  }
+      function saveInventoryLink() {
+        const ingId = document.getElementById('ingSelectC').value; 
+        const erpCode = document.getElementById('erpResultC').value;
+        if(!ingId || !erpCode) { showToast_('請選擇食材與 ERP 品項', 'warn'); return; }
+        const form = {
+          ingredientId: ingId,
+          erpProductCode: erpCode,
+          erpInvUnitId: G.selectedErpUnitId,
+          whOutUnit: document.getElementById('whOutUnit').value,
+          whOutQty: document.getElementById('whOutQty').value,
+          whInUnit: document.getElementById('whInUnit').value,
+          whInQty: document.getElementById('whInQty').value,
+          whInBaseUnit: document.getElementById('whInBaseUnit').value
+        };
+        if(!form.whOutQty || !form.whInQty) { showToast_('請輸入換算數量', 'warn'); return; }
+        showLoading(true);
+        google.script.run.withSuccessHandler(() => {
+          showToast_('已儲存');
+          loadModuleC();
+        }).linkIngredientComplex(form);
+      }
 
-  function showStoreSaveMsg_(msg) {
-    const el = document.getElementById('storeSaveMsg');
-    if (!el) return;
-    el.textContent = msg || '';
-    el.style.display = 'block';
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
-  }
+      // ================= MODULE D =================
+      function loadModuleD() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(items => {
+          G.stores = items || [];
+          renderStoreList();
+          showLoading(false);
+        }).getModuleDData();
+      }
 
-  // ================= MODULE E =================
-  function loadModuleE() {
-    showLoading(true);
-    google.script.run.withSuccessHandler(items => {
-      G.inventoryItems = items || [];
-      renderInventoryList();
-      showLoading(false);
-    }).getModuleEData();
-  }
+      function filterStores() { renderStoreList(); }
 
-  function filterInventoryItems() { renderInventoryList(); }
+      function renderStoreList() {
+        const container = document.getElementById('storeListContainer');
+        if (!container) return;
 
-  function renderInventoryList() {
-    const container = document.getElementById('invListContainer');
-    if (!container) return;
+        const txt = (document.getElementById('storeFilter').value || '').toLowerCase();
+        const statusFilter = document.getElementById('storeStatusFilter').value;
+        const linkFilter = document.getElementById('storeLinkFilter').value;
 
-    const txt = (document.getElementById('invFilter').value || '').toLowerCase();
-    container.innerHTML = '';
+        container.innerHTML = '';
+        if(!G.stores || G.stores.length === 0) {
+          container.innerHTML = '<div class="w3-center">No Data</div>';
+          return;
+        }
 
-    if (!G.inventoryItems || G.inventoryItems.length === 0) {
-      container.innerHTML = '<div class="w3-center">No Data</div>';
-      return;
-    }
+        const filtered = G.stores.filter(s => {
+          const matchTxt = String(s.erp_customer_name || '').toLowerCase().includes(txt);
+          const matchStatus = statusFilter === 'all' || String(s.store_status || 'active') === statusFilter;
+          const isLinked = !!s.pos_store_name;
+          const matchLink = linkFilter === 'all' || (linkFilter === 'linked' ? isLinked : !isLinked);
+          return matchTxt && matchStatus && matchLink;
+        });
 
-    const filtered = G.inventoryItems.filter(it => {
-      const code = String(it.item_code || it.product_code || '').toLowerCase();
-      const name = String(it.item_name || it.erp_inventory_name || '').toLowerCase();
-      return (code + ' ' + name).includes(txt);
-    });
+        filtered.forEach(s => {
+          const status = String(s.store_status || 'active');
+          const statusClass = status === 'active' ? 'status-valid' : 'status-invalid';
+          const isLinked = !!s.pos_store_name;
+          const storeId = String(s.id || '').trim();
 
-    filtered.forEach(it => {
-      const code = String(it.item_code || it.product_code || '').trim();
-      const name = String(it.item_name || it.erp_inventory_name || '').trim();
-      const hasDetail = !!it._has_detail;
+          let row = document.createElement('div');
+          row.className = 'pos-item-row';
 
-      const row = document.createElement('div');
-      row.className = 'pos-item-row';
+          let left = document.createElement('div');
+          left.style.flex = '1';
+          left.style.cursor = 'pointer';
+          left.innerHTML = `
+            <div style="font-weight:bold">${s.erp_customer_name || ''}</div>
+            <div class="pos-details">${s.pos_store_name ? s.pos_store_name : '<span class="w3-text-grey">(未綁定 POS)</span>'}</div>
+          `;
+          left.addEventListener('click', () => selectStore(storeId));
 
-      const left = document.createElement('div');
-      left.style.flex = '1';
-      left.style.cursor = 'pointer';
-      left.innerHTML = `
-        <div style="font-weight:bold">${name}</div>
-        <div class="pos-details">${code}</div>
-      `;
-      left.addEventListener('click', () => selectInventoryItem(code));
+          let right = document.createElement('div');
+          right.style.textAlign = 'right';
+          right.innerHTML = `
+            <span class="status-badge ${statusClass}">${status}</span>
+            <div>${isLinked ? '<i class="fas fa-link w3-text-green"></i>' : '<i class="fas fa-exclamation-circle w3-text-red"></i>'}</div>
+          `;
 
-      const right = document.createElement('div');
-      right.style.textAlign = 'right';
-      right.innerHTML = `
-        <div>${hasDetail ? '<i class="fas fa-clipboard-check w3-text-green"></i>' : '<i class="fas fa-clipboard-list w3-text-grey"></i>'}</div>
-      `;
+          row.appendChild(left);
+          row.appendChild(right);
+          container.appendChild(row);
+        });
+      }
 
-      row.appendChild(left);
-      row.appendChild(right);
-      container.appendChild(row);
-    });
-  }
+      function selectStore(id) {
+        const s = (G.stores || []).find(x => String(x.id) === String(id));
+        if(!s) return;
 
-  function selectInventoryItem(itemCode) {
-    const code = String(itemCode || '').trim();
-    const it = (G.inventoryItems || []).find(x => String(x.item_code || x.product_code || '').trim() === code);
-    if (!it) return;
+        document.getElementById('storeDetailArea').style.display='block';
+        document.getElementById('storePlaceholder').style.display='none';
 
-    document.getElementById('invDetailArea').style.display = 'block';
-    document.getElementById('invPlaceholder').style.display = 'none';
+        document.getElementById('selectedStoreId').value = s.id;
+        document.getElementById('selectedErpName').innerText = s.erp_customer_name || '';
+        document.getElementById('selectedStoreType').innerText = s.store_type || '';
 
-    document.getElementById('selectedInvCode').value = code;
-    document.getElementById('selectedInvName').innerText = it.item_name || it.erp_inventory_name || '';
-    document.getElementById('selectedInvCodeDisplay').innerText = code;
+        document.getElementById('posStoreNameInput').value = s.pos_store_name || '';
+        document.getElementById('storeCountry').value = s.country || '台灣';
+        document.getElementById('storeCity').value = s.city || '';
+        document.getElementById('storeDistrict').value = s.district || '';
+        document.getElementById('storeStatusSelect').value = s.store_status || 'active';
+        document.getElementById('storeAddrTw').value = s.address_zhtw || '';
+        document.getElementById('storeAddrEn').value = s.address_en || '';
+        document.getElementById('storeLat').value = (s.latitude === null || s.latitude === undefined) ? '' : String(s.latitude);
+        document.getElementById('storeLng').value = (s.longitude === null || s.longitude === undefined) ? '' : String(s.longitude);
+      }
 
-    document.getElementById('invCategory').value = it.category || '';
-    document.getElementById('invRank').value = (it.rank === null || it.rank === undefined) ? '' : it.rank;
-    document.getElementById('invItemCode').value = code;
-    document.getElementById('invItemName').value = it.item_name || it.erp_inventory_name || '';
-    // document.getElementById('invUnit').value = it.unit || it.unit_name || '';
-    document.getElementById('invShelfLifeDays').value = (it.shelf_life_days === null || it.shelf_life_days === undefined) ? '' : it.shelf_life_days;
-    document.getElementById('invShelfLifeCategory').value = it.shelf_life_category || '';
-    document.getElementById('invSalesGrade').value = it.sales_grade || '';
-    document.getElementById('invLeadTimeDays').value = (it.lead_time_days === null || it.lead_time_days === undefined) ? '' : it.lead_time_days;
-    document.getElementById('invDelivery').value = it.delivery || '';
-    document.getElementById('invMaxPurchaseParam').value = (it.max_purchase_param === null || it.max_purchase_param === undefined) ? '' : it.max_purchase_param;
-    document.getElementById('invSafetyStockParam').value = (it.safety_stock_param === null || it.safety_stock_param === undefined) ? '' : it.safety_stock_param;
-    document.getElementById('invTurnoverDays').value = (it.inventory_turnover_days === null || it.inventory_turnover_days === undefined) ? '' : it.inventory_turnover_days;
-  }
+      function clearPosStoreName() {
+        const el = document.getElementById('posStoreNameInput');
+        if (el) el.value = '';
+      }
 
-  function saveInventoryDetailE() {
-    const code = document.getElementById('selectedInvCode').value;
-    if (!code) return;
+      function saveStoreDetails() {
+        const id = document.getElementById('selectedStoreId').value;
+        if(!id) return;
 
-    const form = {
-      item_code: code,
-      category: document.getElementById('invCategory').value || null,
-      rank: document.getElementById('invRank').value ? Number(document.getElementById('invRank').value) : null,
-      item_name: document.getElementById('invItemName').value || null,
-      // unit: document.getElementById('invUnit').value || null,
-      shelf_life_days: document.getElementById('invShelfLifeDays').value ? Number(document.getElementById('invShelfLifeDays').value) : null,
-      shelf_life_category: document.getElementById('invShelfLifeCategory').value || null,
-      sales_grade: document.getElementById('invSalesGrade').value || null,
-      lead_time_days: document.getElementById('invLeadTimeDays').value ? Number(document.getElementById('invLeadTimeDays').value) : null,
-      delivery: document.getElementById('invDelivery').value || null,
-      max_purchase_param: document.getElementById('invMaxPurchaseParam').value ? Number(document.getElementById('invMaxPurchaseParam').value) : null,
-      safety_stock_param: document.getElementById('invSafetyStockParam').value ? Number(document.getElementById('invSafetyStockParam').value) : null,
-      inventory_turnover_days: document.getElementById('invTurnoverDays').value ? Number(document.getElementById('invTurnoverDays').value) : null
-    };
+        const form = {
+          id: id,
+          pos_store_name: document.getElementById('posStoreNameInput').value || null,
+          country: document.getElementById('storeCountry').value || null,
+          city: document.getElementById('storeCity').value || null,
+          district: document.getElementById('storeDistrict').value || null,
+          store_status: document.getElementById('storeStatusSelect').value || 'active',
+          address_zhtw: document.getElementById('storeAddrTw').value || null,
+          address_en: document.getElementById('storeAddrEn').value || null,
+          latitude: document.getElementById('storeLat').value || null,
+          longitude: document.getElementById('storeLng').value || null
+        };
 
-    showLoading(true);
-    google.script.run.withSuccessHandler(items => {
-      G.inventoryItems = items || [];
-      renderInventoryList();
-      selectInventoryItem(code);
-      showLoading(false);
-      showToast_('已儲存');
-    }).upsertInventoryDetail(form);
-  }
-  
-  window.onload = function() { document.querySelectorAll('.tab-item')[0].classList.add('active'); document.getElementById('ModuleA').style.display='block'; loadModuleA(); };
-</script>
+        showLoading(true);
+        google.script.run.withSuccessHandler(items => {
+          G.stores = items || [];
+          renderStoreList();
+          selectStore(id);
+          showLoading(false);
+          showStoreSaveMsg_('已儲存');
+        }).updateStoreDetails(form);
+      }
+
+      function showStoreSaveMsg_(msg) {
+        const el = document.getElementById('storeSaveMsg');
+        if (!el) return;
+        el.textContent = msg || '';
+        el.style.display = 'block';
+        clearTimeout(el._t);
+        el._t = setTimeout(() => { el.style.display = 'none'; }, 1800);
+      }
+
+      // ================= MODULE E =================
+      function loadModuleE() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(items => {
+          G.inventoryItems = items || [];
+          renderInventoryList();
+          showLoading(false);
+        }).getModuleEData();
+      }
+
+      function filterInventoryItems() { renderInventoryList(); }
+
+      function renderInventoryList() {
+        const container = document.getElementById('invListContainer');
+        if (!container) return;
+
+        const txt = (document.getElementById('invFilter').value || '').toLowerCase();
+        container.innerHTML = '';
+
+        if (!G.inventoryItems || G.inventoryItems.length === 0) {
+          container.innerHTML = '<div class="w3-center">No Data</div>';
+          return;
+        }
+
+        const filtered = G.inventoryItems.filter(it => {
+          const code = String(it.item_code || it.product_code || '').toLowerCase();
+          const name = String(it.item_name || it.erp_inventory_name || '').toLowerCase();
+          return (code + ' ' + name).includes(txt);
+        });
+
+        filtered.forEach(it => {
+          const code = String(it.item_code || it.product_code || '').trim();
+          const name = String(it.item_name || it.erp_inventory_name || '').trim();
+          const hasDetail = !!it._has_detail;
+
+          const row = document.createElement('div');
+          row.className = 'pos-item-row';
+
+          const left = document.createElement('div');
+          left.style.flex = '1';
+          left.style.cursor = 'pointer';
+          left.innerHTML = `
+            <div style="font-weight:bold">${name}</div>
+            <div class="pos-details">${code}</div>
+          `;
+          left.addEventListener('click', () => selectInventoryItem(code));
+
+          const right = document.createElement('div');
+          right.style.textAlign = 'right';
+          right.innerHTML = `
+            <div>${hasDetail ? '<i class="fas fa-clipboard-check w3-text-green"></i>' : '<i class="fas fa-clipboard-list w3-text-grey"></i>'}</div>
+          `;
+
+          row.appendChild(left);
+          row.appendChild(right);
+          container.appendChild(row);
+        });
+      }
+
+      function selectInventoryItem(itemCode) {
+        const code = String(itemCode || '').trim();
+        const it = (G.inventoryItems || []).find(x => String(x.item_code || x.product_code || '').trim() === code);
+        if (!it) return;
+
+        document.getElementById('invDetailArea').style.display = 'block';
+        document.getElementById('invPlaceholder').style.display = 'none';
+
+        document.getElementById('selectedInvCode').value = code;
+        document.getElementById('selectedInvName').innerText = it.item_name || it.erp_inventory_name || '';
+        document.getElementById('selectedInvCodeDisplay').innerText = code;
+
+        document.getElementById('invCategory').value = it.category || '';
+        document.getElementById('invRank').value = (it.rank === null || it.rank === undefined) ? '' : it.rank;
+        document.getElementById('invItemCode').value = code;
+        document.getElementById('invItemName').value = it.item_name || it.erp_inventory_name || '';
+        // document.getElementById('invUnit').value = it.unit || it.unit_name || '';
+        document.getElementById('invShelfLifeDays').value = (it.shelf_life_days === null || it.shelf_life_days === undefined) ? '' : it.shelf_life_days;
+        document.getElementById('invShelfLifeCategory').value = it.shelf_life_category || '';
+        document.getElementById('invSalesGrade').value = it.sales_grade || '';
+        document.getElementById('invLeadTimeDays').value = (it.lead_time_days === null || it.lead_time_days === undefined) ? '' : it.lead_time_days;
+        document.getElementById('invDelivery').value = it.delivery || '';
+        document.getElementById('invMaxPurchaseParam').value = (it.max_purchase_param === null || it.max_purchase_param === undefined) ? '' : it.max_purchase_param;
+        document.getElementById('invSafetyStockParam').value = (it.safety_stock_param === null || it.safety_stock_param === undefined) ? '' : it.safety_stock_param;
+        document.getElementById('invTurnoverDays').value = (it.inventory_turnover_days === null || it.inventory_turnover_days === undefined) ? '' : it.inventory_turnover_days;
+      }
+
+      function saveInventoryDetailE() {
+        const code = document.getElementById('selectedInvCode').value;
+        if (!code) return;
+
+        const form = {
+          item_code: code,
+          category: document.getElementById('invCategory').value || null,
+          rank: document.getElementById('invRank').value ? Number(document.getElementById('invRank').value) : null,
+          item_name: document.getElementById('invItemName').value || null,
+          // unit: document.getElementById('invUnit').value || null,
+          shelf_life_days: document.getElementById('invShelfLifeDays').value ? Number(document.getElementById('invShelfLifeDays').value) : null,
+          shelf_life_category: document.getElementById('invShelfLifeCategory').value || null,
+          sales_grade: document.getElementById('invSalesGrade').value || null,
+          lead_time_days: document.getElementById('invLeadTimeDays').value ? Number(document.getElementById('invLeadTimeDays').value) : null,
+          delivery: document.getElementById('invDelivery').value || null,
+          max_purchase_param: document.getElementById('invMaxPurchaseParam').value ? Number(document.getElementById('invMaxPurchaseParam').value) : null,
+          safety_stock_param: document.getElementById('invSafetyStockParam').value ? Number(document.getElementById('invSafetyStockParam').value) : null,
+          inventory_turnover_days: document.getElementById('invTurnoverDays').value ? Number(document.getElementById('invTurnoverDays').value) : null
+        };
+
+        showLoading(true);
+        google.script.run.withSuccessHandler(items => {
+          G.inventoryItems = items || [];
+          renderInventoryList();
+          selectInventoryItem(code);
+          showLoading(false);
+          showToast_('已儲存');
+        }).upsertInventoryDetail(form);
+      }
+      
+      window.onload = function() { document.querySelectorAll('.tab-item')[0].classList.add('active'); document.getElementById('ModuleA').style.display='block'; loadModuleA(); };
+    </script>
+    
   </body>
 </html>
