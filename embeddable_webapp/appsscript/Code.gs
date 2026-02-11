@@ -249,9 +249,10 @@ function fetchRows_(table, queryParams) {
  * @param {string} [schema] 可選的 schema (例如 'tb_mgmt')
  * @return {Object} Edge Function 回應 { ok: true, item: {...} } 或 { ok: true, item: null }
  */
-function fetchRow_(table, column, value, schema) {
+function fetchRow_(table, column, value, schema, options) {
   const params = { table: table, col: column, val: value };
   if (schema) { params.schema = schema; }
+  if (options && options.include_deleted) { params.include_deleted = "true"; }
   return callSupabaseEdgeJson_("get", params, null);
 }
 
@@ -342,156 +343,1123 @@ function clearStatusCache_() {
    Module A: POS 名稱對應
    ========================================= */
 function getModuleAData() {
-  const posItems = getTableData(DB_CONFIG.pos_items.name);
-  const mapping = getTableData(DB_CONFIG.pos_item_mapping.name);
-  const products = getTableData(DB_CONFIG.products.name);
-  
-  let mapIndex = {};
-  mapping.forEach(m => {
-    if(!mapIndex[m.pos_item_id]) mapIndex[m.pos_item_id] = [];
-    mapIndex[m.pos_item_id].push(m.product_id);
-  });
-  
-  const posData = posItems.map(p => {
-    return {
-      ...p,
-      mapped_product_ids: mapIndex[p.pos_item_id] || []
-    };
-  });
-  
-  return { posItems: posData, products: products };
+  try {
+    // 1) 查詢所有相關表（active only）
+    var posItemsResp = fetchRows_("pos_items", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var posOptionGroupResp = fetchRows_("pos_option_group", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var posOptionValueResp = fetchRows_("pos_option_value", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var mappingResp = fetchRows_("pos_item_mapping", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var productsResp = fetchRows_("products", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    // 檢查查詢結果
+    var posItems = (posItemsResp && posItemsResp.ok && posItemsResp.items) ? posItemsResp.items : [];
+    var posOptionGroups = (posOptionGroupResp && posOptionGroupResp.ok && posOptionGroupResp.items) ? posOptionGroupResp.items : [];
+    var posOptionValues = (posOptionValueResp && posOptionValueResp.ok && posOptionValueResp.items) ? posOptionValueResp.items : [];
+    var mapping = (mappingResp && mappingResp.ok && mappingResp.items) ? mappingResp.items : [];
+    var products = (productsResp && productsResp.ok && productsResp.items) ? productsResp.items : [];
+
+    // 2) 獲取 status IDs
+    var statusIds = getStatusIds_();
+
+    // 3) 建立映射表（在內存中）
+    // optionGroupMap: id → pos_option_group (TEXT)
+    var optionGroupMap = {};
+    posOptionGroups.forEach(function(og) {
+      optionGroupMap[String(og.id)] = og.pos_option_group;
+    });
+
+    // optionValueMap: id → pos_option_value (TEXT)
+    var optionValueMap = {};
+    posOptionValues.forEach(function(ov) {
+      optionValueMap[String(ov.id)] = ov.pos_option_value;
+    });
+
+    // mappingIndex: pos_item_id → [product_id, ...]
+    var mappingIndex = {};
+    mapping.forEach(function(m) {
+      var posItemId = String(m.pos_item_id);
+      if (!mappingIndex[posItemId]) {
+        mappingIndex[posItemId] = [];
+      }
+      mappingIndex[posItemId].push(m.product_id);
+    });
+
+    // 4) 轉換 posItems 數據（字段名映射 + FK ID → TEXT 轉換）
+    var posData = posItems.map(function(p) {
+      // Status: status_id → "有效"/"無效"
+      var statusText = (p.status_id === statusIds.active) ? "有效" : "無效";
+
+      // Option Group: FK ID → TEXT
+      var optionGroup = p.pos_option_group_id ? (optionGroupMap[String(p.pos_option_group_id)] || null) : null;
+
+      // Option Value: FK ID → TEXT
+      var optionValue = p.pos_option_value_id ? (optionValueMap[String(p.pos_option_value_id)] || null) : null;
+
+      return {
+        pos_item_id: p.id,  // id → pos_item_id
+        pos_item_name: p.pos_item_name,
+        pos_option_group: optionGroup,  // FK ID → TEXT
+        pos_option_name: optionValue,   // FK ID → TEXT
+        status: statusText,  // status_id → "有效"/"無效"
+        mapped_product_ids: mappingIndex[String(p.id)] || []
+      };
+    });
+
+    // 5) 轉換 products 數據（字段名映射）
+    var productsData = products.map(function(p) {
+      return {
+        product_id: p.id,  // id → product_id
+        product_name: p.product_name
+      };
+    });
+
+    return { posItems: posData, products: productsData };
+  } catch (e) {
+    Logger.log('Exception in getModuleAData: ' + e);
+    return { posItems: [], products: [] };
+  }
 }
 
 function savePosMapping(posItemId, productIdsArray) {
-  deleteRowByCondition(DB_CONFIG.pos_item_mapping.name, (row) => String(row.pos_item_id) === String(posItemId));
-  let currentMaxId = getMaxId(DB_CONFIG.pos_item_mapping.name, 'pos_item_mapping_id');
-  productIdsArray.forEach(prodId => {
-    if(prodId) {
-      currentMaxId++;
-      insertRow(DB_CONFIG.pos_item_mapping.name, {
-        'pos_item_mapping_id': currentMaxId,
-        'pos_item_id': posItemId,
-        'product_id': prodId
-      });
+  try {
+    // 1) 獲取 status IDs
+    var statusIds = getStatusIds_();
+
+    // 2) 查詢該 pos_item_id 的所有現有映射（包含已刪除的）
+    var allMappingResp = fetchRows_("pos_item_mapping", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "true"
+    });
+
+    if (!allMappingResp || !allMappingResp.ok) {
+      throw new Error("Failed to fetch pos_item_mapping");
     }
-  });
-  return { success: true };
+
+    var allMapping = allMappingResp.items || [];
+
+    // 3) 過濾出屬於該 pos_item_id 的記錄
+    var existingMapping = allMapping.filter(function(m) {
+      return String(m.pos_item_id) === String(posItemId);
+    });
+
+    // 建立映射：product_id → mapping record
+    var existingMappingMap = {};
+    existingMapping.forEach(function(m) {
+      existingMappingMap[String(m.product_id)] = m;
+    });
+
+    // 將 productIdsArray 轉換為 Set（去重並方便查找）
+    var newProductIds = {};
+    productIdsArray.forEach(function(prodId) {
+      if (prodId) {
+        newProductIds[String(prodId)] = true;
+      }
+    });
+
+    // 4) 對每個現有映射進行處理
+    existingMapping.forEach(function(m) {
+      var productIdStr = String(m.product_id);
+
+      if (newProductIds[productIdStr]) {
+        // 如果 product_id 仍在 newProductIds 中 → 復活（如果已刪除）或保持 active
+        if (m.status_id !== statusIds.active) {
+          // 復活：設置 status_id = active
+          var revivedRow = {
+            id: m.id,
+            pos_item_id: m.pos_item_id,
+            product_id: m.product_id,
+            status_id: statusIds.active,
+            updated_at: new Date().toISOString()
+          };
+          upsertRow_("pos_item_mapping", revivedRow, ["id"], "tb_mgmt");
+        }
+        // 如果已經是 active，不需要操作
+      } else {
+        // 如果不在 newProductIds 中 → 軟刪除
+        if (m.status_id === statusIds.active) {
+          deleteRow_("pos_item_mapping", { id: m.id }, "tb_mgmt");
+        }
+        // 如果已經是 inactive，不需要操作
+      }
+    });
+
+    // 5) 對每個新的 product_id（不在現有映射中）→ 創建新的映射記錄
+    for (var productIdStr in newProductIds) {
+      if (!existingMappingMap[productIdStr]) {
+        // 創建新的映射記錄
+        var newMappingRow = {
+          pos_item_id: posItemId,
+          product_id: Number(productIdStr),
+          status_id: statusIds.active,
+          updated_at: new Date().toISOString()
+        };
+
+        // 不包含 id，讓數據庫自動生成
+        upsertRow_("pos_item_mapping", newMappingRow, ["pos_item_id", "product_id"], "tb_mgmt");
+      }
+    }
+
+    return { success: true };
+  } catch (e) {
+    Logger.log('Exception in savePosMapping: ' + e);
+    throw e;
+  }
 }
 
 function updatePosStatus(posItemId, newStatus) {
-  updateRow(DB_CONFIG.pos_items.name, 'pos_item_id', posItemId, { 'status': newStatus });
-  return getModuleAData();
+  try {
+    // 1) 獲取 status IDs
+    var statusIds = getStatusIds_();
+
+    // 2) 映射中文狀態到 status_id
+    var statusId;
+    if (newStatus === "有效") {
+      statusId = statusIds.active;
+    } else if (newStatus === "無效") {
+      statusId = statusIds.inactive;
+    } else {
+      statusId = statusIds.active;  // Default to active
+    }
+
+    // 3) 使用 fetch-then-merge 模式更新 pos_items
+    // Fetch existing record
+    var existingResp = fetchRow_("pos_items", "id", posItemId, "tb_mgmt", { include_deleted: true });
+    Logger.log('Existing resp: ' + JSON.stringify(existingResp) );
+    if (!existingResp || !existingResp.ok || !existingResp.item) {
+      throw new Error("POS item not found for id: " + posItemId);
+    }
+
+    var existing = existingResp.item;
+    Logger.log('Existing item: ' + JSON.stringify(existing) );
+
+    // Merge: preserve all fields, update only status_id
+    var updatedRow = {
+      id: existing.id,
+      pos_item_name: existing.pos_item_name,
+      pos_option_group_id: existing.pos_option_group_id,
+      pos_option_value_id: existing.pos_option_value_id,
+      status_id: statusId,  // UPDATE
+      updated_at: new Date().toISOString()
+    };
+    Logger.log('to update as: ' + JSON.stringify(updatedRow) );
+    var upsertResult = upsertRow_("pos_items", updatedRow, ["id"], "tb_mgmt");
+
+    if (!upsertResult || !upsertResult.ok) {
+      throw new Error("Failed to update POS item status");
+    }
+
+    // 4) 返回完整數據（調用 getModuleAData）
+    return getModuleAData();
+  } catch (e) {
+    Logger.log('Exception in updatePosStatus: ' + e);
+    throw e;
+  }
+}
+
+// ==========================================
+// Test Functions: Module A (POS Item Mapping)
+// ==========================================
+
+function testGetModuleAData() {
+  var data = getModuleAData();
+  Logger.log("POS items count: " + data.posItems.length);
+  Logger.log("Products count: " + data.products.length);
+
+  if (data.posItems.length > 0) {
+    Logger.log("Sample POS item: " + JSON.stringify(data.posItems[0]));
+
+    // 驗證字段
+    var sample = data.posItems[0];
+    Logger.log("pos_item_id type: " + typeof sample.pos_item_id);
+    Logger.log("status type: " + typeof sample.status + " (should be string)");
+    Logger.log("status value: " + sample.status);
+    Logger.log("mapped_product_ids length: " + sample.mapped_product_ids.length);
+
+    // 驗證字段存在
+    if (sample.pos_item_id !== undefined) {
+      Logger.log("✅ Field present: pos_item_id");
+    }
+    if (sample.pos_item_name !== undefined) {
+      Logger.log("✅ Field present: pos_item_name");
+    }
+    if (sample.pos_option_group !== undefined) {
+      Logger.log("✅ Field present: pos_option_group (value: " + sample.pos_option_group + ")");
+    }
+    if (sample.pos_option_name !== undefined) {
+      Logger.log("✅ Field present: pos_option_name (value: " + sample.pos_option_name + ")");
+    }
+  }
+
+  if (data.products.length > 0) {
+    Logger.log("Sample product: " + JSON.stringify(data.products[0]));
+  }
+
+  return data;
+}
+
+function testUpdatePosStatus() {
+  // 獲取第一個 POS item
+  var data = getModuleAData();
+  if (data.posItems.length === 0) {
+    Logger.log("No POS items found");
+    return;
+  }
+
+  var testItem = data.posItems[0];
+  Logger.log("Testing with POS item: " + testItem.pos_item_name + " (ID: " + testItem.pos_item_id + ")");
+  Logger.log("Current status: " + testItem.status);
+
+  // 切換狀態
+  var newStatus = testItem.status === "有效" ? "無效" : "有效";
+  Logger.log("Changing status to: " + newStatus);
+
+  var result = updatePosStatus(testItem.pos_item_id, newStatus);
+
+  // 驗證：根據新狀態決定如何查找
+  if (newStatus === "無效") {
+    // 如果切換為"無效"，項目不會出現在 active 列表中
+    Logger.log("Status changed to '無效' - item should be removed from active list");
+
+    // 檢查項目是否從列表中消失
+    var stillInList = result.posItems.find(function(p) {
+      return p.pos_item_id === testItem.pos_item_id;
+    });
+
+    if (!stillInList) {
+      Logger.log("✅ Status updated successfully - item removed from active list");
+      Logger.log("  Old status: " + testItem.status);
+      Logger.log("  New status: " + newStatus);
+      Logger.log("  Active items before: " + data.posItems.length);
+      Logger.log("  Active items after: " + result.posItems.length);
+
+      // 驗證數據庫中的實際狀態（包含已刪除的）
+      var allItemsResp = fetchRows_("pos_items", {
+        limit: 200,
+        schema: "tb_mgmt",
+        include_deleted: "true"
+      });
+
+      if (allItemsResp && allItemsResp.ok) {
+        var dbItem = allItemsResp.items.find(function(p) {
+          return p.id === testItem.pos_item_id;
+        });
+
+        if (dbItem) {
+          var statusIds = getStatusIds_();
+          if (dbItem.status_id === statusIds.inactive) {
+            Logger.log("✅ Database status_id correctly set to inactive");
+          } else {
+            Logger.log("❌ Database status_id not set to inactive: " + dbItem.status_id);
+          }
+        }
+      }
+    } else {
+      Logger.log("❌ Status update failed - item still appears in active list");
+    }
+  } else {
+    // 如果切換為"有效"，項目應該出現在列表中
+    var updatedItem = result.posItems.find(function(p) {
+      return p.pos_item_id === testItem.pos_item_id;
+    });
+
+    if (updatedItem && updatedItem.status === newStatus) {
+      Logger.log("✅ Status updated successfully");
+      Logger.log("  Old status: " + testItem.status);
+      Logger.log("  New status: " + updatedItem.status);
+    } else {
+      Logger.log("❌ Status update failed");
+      if (updatedItem) {
+        Logger.log("  Expected: " + newStatus + ", Got: " + updatedItem.status);
+      } else {
+        Logger.log("  Item not found in result");
+      }
+    }
+  }
+
+  return result;
+}
+
+function testUpdatePosStatusFullCycle() {
+  // 測試完整的狀態切換循環：有效 → 無效 → 有效
+  Logger.log("=== Testing Full Status Toggle Cycle ===");
+
+  var data = getModuleAData();
+  if (data.posItems.length === 0) {
+    Logger.log("No POS items found");
+    return;
+  }
+
+  var testItem = data.posItems[0];
+  var originalStatus = testItem.status;
+  Logger.log("Starting with item: " + testItem.pos_item_name + " (ID: " + testItem.pos_item_id + ")");
+  Logger.log("Original status: " + originalStatus);
+
+  // Step 1: 切換為 "無效"
+  Logger.log("\n--- Step 1: Toggle to '無效' ---");
+  var result1 = updatePosStatus(testItem.pos_item_id, "無效");
+  var itemInList1 = result1.posItems.find(function(p) {
+    return p.pos_item_id === testItem.pos_item_id;
+  });
+
+  if (!itemInList1) {
+    Logger.log("✅ Step 1 passed: Item removed from active list");
+  } else {
+    Logger.log("❌ Step 1 failed: Item still in active list with status: " + itemInList1.status);
+  }
+
+  // Step 2: 切換回 "有效"
+  Logger.log("\n--- Step 2: Toggle back to '有效' ---");
+  var result2 = updatePosStatus(testItem.pos_item_id, "有效");
+  var itemInList2 = result2.posItems.find(function(p) {
+    return p.pos_item_id === testItem.pos_item_id;
+  });
+
+  if (itemInList2 && itemInList2.status === "有效") {
+    Logger.log("✅ Step 2 passed: Item restored to active list");
+    Logger.log("  Status: " + itemInList2.status);
+  } else {
+    Logger.log("❌ Step 2 failed");
+    if (itemInList2) {
+      Logger.log("  Item found but wrong status: " + itemInList2.status);
+    } else {
+      Logger.log("  Item not found in active list");
+    }
+  }
+
+  // Summary
+  Logger.log("\n=== Test Summary ===");
+  Logger.log("Original status: " + originalStatus);
+  Logger.log("Final status: " + (itemInList2 ? itemInList2.status : "not found"));
+  Logger.log("Test result: " + (itemInList2 && itemInList2.status === "有效" ? "✅ PASSED" : "❌ FAILED"));
+
+  return result2;
+}
+
+function testSavePosMapping() {
+  // 獲取第一個 POS item 和前兩個 product
+  var data = getModuleAData();
+  if (data.posItems.length === 0 || data.products.length === 0) {
+    Logger.log("No data found");
+    return;
+  }
+
+  var testItem = data.posItems[0];
+  var testProducts = data.products.slice(0, Math.min(2, data.products.length)).map(function(p) {
+    return p.product_id;
+  });
+
+  Logger.log("Testing mapping for: " + testItem.pos_item_name);
+  Logger.log("Current mapped products: " + JSON.stringify(testItem.mapped_product_ids));
+  Logger.log("New mapping to products: " + JSON.stringify(testProducts));
+
+  var result = savePosMapping(testItem.pos_item_id, testProducts);
+  Logger.log("Save result: " + JSON.stringify(result));
+
+  // 驗證
+  var updatedData = getModuleAData();
+  var updatedItem = updatedData.posItems.find(function(p) {
+    return p.pos_item_id === testItem.pos_item_id;
+  });
+
+  Logger.log("Updated mapped_product_ids: " + JSON.stringify(updatedItem.mapped_product_ids));
+
+  if (updatedItem.mapped_product_ids.length === testProducts.length) {
+    Logger.log("✅ Mapping saved successfully");
+    Logger.log("  Expected count: " + testProducts.length);
+    Logger.log("  Actual count: " + updatedItem.mapped_product_ids.length);
+
+    // 驗證每個 product_id 都存在
+    var allMatch = testProducts.every(function(id) {
+      return updatedItem.mapped_product_ids.indexOf(id) >= 0;
+    });
+
+    if (allMatch) {
+      Logger.log("✅ All product IDs match");
+    } else {
+      Logger.log("❌ Product IDs mismatch");
+    }
+  } else {
+    Logger.log("❌ Mapping save failed");
+    Logger.log("  Expected count: " + testProducts.length);
+    Logger.log("  Actual count: " + updatedItem.mapped_product_ids.length);
+  }
+
+  return result;
 }
 
 /* =========================================
-   Module B: 產品與食材資料
+   Module B: 產品與食材資料 (Supabase)
    ========================================= */
 
+/**
+ * 內部輔助：將 Supabase 原始 ingredients 映射為前端格式
+ * @param {Object[]} rawIngredients - Supabase ingredients 資料
+ * @param {Object} erpMap - erp_inventory id → product_code 映射
+ */
+function mapIngredients_(rawIngredients, erpMap) {
+  return rawIngredients.map(function(i) {
+    return {
+      ingredient_id: i.id,
+      ingredient_name: i.ingredient_name,
+      is_semi_product: i.is_semi_product,
+      purchase_source: i.purchase_source,
+      erp_inventory_product_code: i.erp_inventory_id ? (erpMap[String(i.erp_inventory_id)] || '') : ''
+    };
+  });
+}
+
+/**
+ * 內部輔助：將 Supabase 原始 units 映射為前端格式
+ */
+function mapUnits_(rawUnits) {
+  return rawUnits.map(function(u) {
+    return {
+      unit_id: u.id,
+      unit_name: u.unit_name
+    };
+  });
+}
+
 function getModuleBData() {
-  const products = getTableData(DB_CONFIG.products.name);
-  const categories = getTableData(DB_CONFIG.product_categories.name);
-  const ingredients = getTableData(DB_CONFIG.ingredients.name);
-  const units = getTableData(DB_CONFIG.units.name); // 取得單位列表
-  const semiProducts = ingredients.filter(i => String(i.is_semi_product).toLowerCase() === 'true');
-  
-  return { products, categories, semiProducts, ingredients, units }; 
+  try {
+    // 1) 查詢所有相關表
+    var productsResp = fetchRows_("products", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var categoriesResp = fetchRows_("product_categories", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var ingredientsResp = fetchRows_("ingredients", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var unitsResp = fetchRows_("units", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var erpResp = fetchRows_("erp_inventory", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+
+    var rawProducts = (productsResp && productsResp.ok && productsResp.items) ? productsResp.items : [];
+    var rawCategories = (categoriesResp && categoriesResp.ok && categoriesResp.items) ? categoriesResp.items : [];
+    var rawIngredients = (ingredientsResp && ingredientsResp.ok && ingredientsResp.items) ? ingredientsResp.items : [];
+    var rawUnits = (unitsResp && unitsResp.ok && unitsResp.items) ? unitsResp.items : [];
+    var rawErp = (erpResp && erpResp.ok && erpResp.items) ? erpResp.items : [];
+
+    // 2) 建立 erp_inventory id → product_code 映射（供 ingredients 使用）
+    var erpMap = {};
+    rawErp.forEach(function(e) {
+      erpMap[String(e.id)] = e.product_code || '';
+    });
+
+    // 3) 字段名映射（id → 前端期望的欄位名）
+    var products = rawProducts.map(function(p) {
+      return {
+        product_id: p.id,
+        product_name: p.product_name,
+        category_id: p.category_id
+      };
+    });
+
+    var categories = rawCategories.map(function(c) {
+      return {
+        category_id: c.id,
+        category_name: c.category_name
+      };
+    });
+
+    var ingredients = mapIngredients_(rawIngredients, erpMap);
+    var units = mapUnits_(rawUnits);
+
+    // 4) semiProducts：從 ingredients 過濾
+    var semiProducts = ingredients.filter(function(i) {
+      return i.is_semi_product === true || String(i.is_semi_product).toLowerCase() === 'true';
+    });
+
+    return { products: products, categories: categories, semiProducts: semiProducts, ingredients: ingredients, units: units };
+  } catch (e) {
+    Logger.log('Exception in getModuleBData: ' + e);
+    return { products: [], categories: [], semiProducts: [], ingredients: [], units: [] };
+  }
 }
 
 // 單位管理功能
 function createUnit(name) {
-  const newId = getMaxId(DB_CONFIG.units.name, 'unit_id') + 1;
-  insertRow(DB_CONFIG.units.name, { 'unit_id': newId, 'unit_name': name });
-  return getModuleBData();
+  try {
+    var statusIds = getStatusIds_();
+    var result = upsertRow_("units", {
+      unit_name: name,
+      status_id: statusIds.active,
+      updated_at: new Date().toISOString()
+    }, ["unit_name"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to create unit");
+    }
+    return getModuleBData();
+  } catch (e) {
+    Logger.log('Exception in createUnit: ' + e);
+    throw e;
+  }
 }
 
 function updateUnit(id, name) {
-  updateRow(DB_CONFIG.units.name, 'unit_id', id, { 'unit_name': name });
-  return getModuleBData();
+  try {
+    var existingResp = fetchRow_("units", "id", id, "tb_mgmt");
+    if (!existingResp || !existingResp.ok || !existingResp.item) {
+      throw new Error("Unit not found for id: " + id);
+    }
+    var existing = existingResp.item;
+
+    var result = upsertRow_("units", {
+      id: existing.id,
+      unit_name: name,
+      status_id: existing.status_id,
+      updated_at: new Date().toISOString()
+    }, ["id"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to update unit");
+    }
+    return getModuleBData();
+  } catch (e) {
+    Logger.log('Exception in updateUnit: ' + e);
+    throw e;
+  }
 }
 
 function createProductCategory(name) {
-  const newId = getMaxId(DB_CONFIG.product_categories.name, 'category_id') + 1;
-  insertRow(DB_CONFIG.product_categories.name, {
-    'category_id': newId,
-    'category_name': name
-  });
-  return getModuleBData(); 
+  try {
+    var statusIds = getStatusIds_();
+    var result = upsertRow_("product_categories", {
+      category_name: name,
+      status_id: statusIds.active,
+      updated_at: new Date().toISOString()
+    }, ["category_name"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to create product category");
+    }
+    return getModuleBData();
+  } catch (e) {
+    Logger.log('Exception in createProductCategory: ' + e);
+    throw e;
+  }
 }
 
 function createNewProduct(name, categoryId) {
-  const newId = getMaxId(DB_CONFIG.products.name, 'product_id') + 1;
-  insertRow(DB_CONFIG.products.name, {
-    'product_id': newId, 'product_name': name, 'category_id': categoryId
-  });
-  return getModuleBData();
+  try {
+    var statusIds = getStatusIds_();
+    var result = upsertRow_("products", {
+      product_name: name,
+      category_id: categoryId,
+      status_id: statusIds.active,
+      updated_at: new Date().toISOString()
+    }, ["product_name"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to create product");
+    }
+    return getModuleBData();
+  } catch (e) {
+    Logger.log('Exception in createNewProduct: ' + e);
+    throw e;
+  }
 }
 
 function updateProduct(productId, name, categoryId) {
-  updateRow(DB_CONFIG.products.name, 'product_id', productId, {
-    'product_name': name, 'category_id': categoryId
-  });
-  return getModuleBData();
+  try {
+    var existingResp = fetchRow_("products", "id", productId, "tb_mgmt");
+    if (!existingResp || !existingResp.ok || !existingResp.item) {
+      throw new Error("Product not found for id: " + productId);
+    }
+    var existing = existingResp.item;
+
+    var result = upsertRow_("products", {
+      id: existing.id,
+      product_name: name,
+      category_id: categoryId,
+      status_id: existing.status_id,
+      updated_at: new Date().toISOString()
+    }, ["id"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to update product");
+    }
+    return getModuleBData();
+  } catch (e) {
+    Logger.log('Exception in updateProduct: ' + e);
+    throw e;
+  }
 }
 
 function createNewIngredient(name, source, isSemi) {
-  const newId = getMaxId(DB_CONFIG.ingredients.name, 'ingredient_id') + 1;
-  insertRow(DB_CONFIG.ingredients.name, {
-    'ingredient_id': newId, 'ingredient_name': name,
-    'purchase_source': source, 'is_semi_product': isSemi, 'erp_inventory_product_code': ''
-  });
-  return { success: true, newId: newId };
+  try {
+    var statusIds = getStatusIds_();
+    var result = upsertRow_("ingredients", {
+      ingredient_name: name,
+      purchase_source: source,
+      is_semi_product: (isSemi === 'true' || isSemi === true),
+      status_id: statusIds.active,
+      updated_at: new Date().toISOString()
+    }, ["id"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to create ingredient");
+    }
+    return { success: true };
+  } catch (e) {
+    Logger.log('Exception in createNewIngredient: ' + e);
+    throw e;
+  }
 }
 
 function updateIngredientDetails(id, name, source, isSemi) {
-  updateRow(DB_CONFIG.ingredients.name, 'ingredient_id', id, {
-    'ingredient_name': name,
-    'purchase_source': source,
-    'is_semi_product': isSemi
-  });
-  return getModuleBData();
+  try {
+    var existingResp = fetchRow_("ingredients", "id", id, "tb_mgmt");
+    if (!existingResp || !existingResp.ok || !existingResp.item) {
+      throw new Error("Ingredient not found for id: " + id);
+    }
+    var existing = existingResp.item;
+
+    var result = upsertRow_("ingredients", {
+      id: existing.id,
+      ingredient_name: name,
+      purchase_source: source,
+      is_semi_product: (isSemi === 'true' || isSemi === true),
+      erp_inventory_id: existing.erp_inventory_id,
+      status_id: existing.status_id,
+      updated_at: new Date().toISOString()
+    }, ["id"], "tb_mgmt");
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to update ingredient");
+    }
+    return getModuleBData();
+  } catch (e) {
+    Logger.log('Exception in updateIngredientDetails: ' + e);
+    throw e;
+  }
 }
 
 function getBomDetail(itemId, type) {
-  const tableName = type === 'product' ? DB_CONFIG.product_bom.name : DB_CONFIG.semi_product_bom.name;
-  const idCol = type === 'product' ? 'product_id' : 'semi_product_id';
-  const bomIdCol = type === 'product' ? 'product_bom_id' : 'semi_product_bom_id';
-  
-  const allBom = getTableData(tableName);
-  const ingredients = getTableData(DB_CONFIG.ingredients.name);
-  const units = getTableData(DB_CONFIG.units.name);
-  
-  const bomRows = allBom.filter(b => String(b[idCol]) === String(itemId));
-  const enrichedBom = bomRows.map(b => {
-    const ing = ingredients.find(i => String(i.ingredient_id) === String(b.ingredient_id));
-    const u = units.find(unit => String(unit.unit_id) === String(b.unit_id));
-    return {
-      ...b,
-      bom_id: b[bomIdCol],  
-      ingredient_name: ing ? ing.ingredient_name : 'Unknown',
-      unit_name: u ? u.unit_name : 'Unknown'
-    };
-  });
-  return { bom: enrichedBom, ingredients, units };
+  try {
+    var tableName = type === 'product' ? "product_bom" : "semi_product_bom";
+    var fkCol = type === 'product' ? 'product_id' : 'semi_product_id';
+
+    // 1) 查詢 BOM 表、ingredients、units
+    var bomResp = fetchRows_(tableName, { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var ingredientsResp = fetchRows_("ingredients", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var unitsResp = fetchRows_("units", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+    var erpResp = fetchRows_("erp_inventory", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+
+    var allBom = (bomResp && bomResp.ok && bomResp.items) ? bomResp.items : [];
+    var rawIngredients = (ingredientsResp && ingredientsResp.ok && ingredientsResp.items) ? ingredientsResp.items : [];
+    var rawUnits = (unitsResp && unitsResp.ok && unitsResp.items) ? unitsResp.items : [];
+    var rawErp = (erpResp && erpResp.ok && erpResp.items) ? erpResp.items : [];
+
+    // 2) 建立查詢映射
+    var ingMap = {};
+    rawIngredients.forEach(function(i) { ingMap[String(i.id)] = i.ingredient_name; });
+
+    var unitMap = {};
+    rawUnits.forEach(function(u) { unitMap[String(u.id)] = u.unit_name; });
+
+    var erpMap = {};
+    rawErp.forEach(function(e) { erpMap[String(e.id)] = e.product_code || ''; });
+
+    // 3) 過濾並豐富 BOM 資料
+    var bomRows = allBom.filter(function(b) { return String(b[fkCol]) === String(itemId); });
+    var enrichedBom = bomRows.map(function(b) {
+      return {
+        bom_id: b.id,
+        ingredient_id: b.ingredient_id,
+        quantity: b.quantity,
+        unit_id: b.unit_id,
+        ingredient_name: ingMap[String(b.ingredient_id)] || 'Unknown',
+        unit_name: unitMap[String(b.unit_id)] || 'Unknown'
+      };
+    });
+
+    // 4) 映射 ingredients 和 units 為前端格式
+    var ingredients = mapIngredients_(rawIngredients, erpMap);
+    var units = mapUnits_(rawUnits);
+
+    return { bom: enrichedBom, ingredients: ingredients, units: units };
+  } catch (e) {
+    Logger.log('Exception in getBomDetail: ' + e);
+    return { bom: [], ingredients: [], units: [] };
+  }
 }
 
 function addBomItem(itemId, type, ingredientId, quantity, unitId) {
-  const tableName = type === 'product' ? DB_CONFIG.product_bom.name : DB_CONFIG.semi_product_bom.name;
-  const pkCol = type === 'product' ? 'product_bom_id' : 'semi_product_bom_id';
-  const fkCol = type === 'product' ? 'product_id' : 'semi_product_id';
-  
-  const newId = getMaxId(tableName, pkCol) + 1;
-  let row = {};
-  row[pkCol] = newId; row[fkCol] = itemId; row['ingredient_id'] = ingredientId;
-  row['quantity'] = quantity; row['unit_id'] = unitId;
-  insertRow(tableName, row);
-  return getBomDetail(itemId, type);
+  try {
+    var tableName = type === 'product' ? "product_bom" : "semi_product_bom";
+    var fkCol = type === 'product' ? 'product_id' : 'semi_product_id';
+
+    var statusIds = getStatusIds_();
+    var row = {
+      ingredient_id: ingredientId,
+      quantity: quantity,
+      unit_id: unitId,
+      status_id: statusIds.active,
+      updated_at: new Date().toISOString()
+    };
+    row[fkCol] = itemId;
+
+    var result = upsertRow_(tableName, row, ["id"], "tb_mgmt");
+    if (!result || !result.ok) {
+      throw new Error("Failed to add BOM item");
+    }
+    return getBomDetail(itemId, type);
+  } catch (e) {
+    Logger.log('Exception in addBomItem: ' + e);
+    throw e;
+  }
 }
 
 function removeBomItem(bomId, itemId, type) {
-  const tableName = type === 'product' ? DB_CONFIG.product_bom.name : DB_CONFIG.semi_product_bom.name;
-  const pkCol = type === 'product' ? 'product_bom_id' : 'semi_product_bom_id';
-  deleteRowById(tableName, pkCol, bomId);
-  return getBomDetail(itemId, type);
+  try {
+    var tableName = type === 'product' ? "product_bom" : "semi_product_bom";
+
+    var result = deleteRow_(tableName, { id: bomId }, "tb_mgmt");
+    if (!result || !result.ok) {
+      throw new Error("Failed to remove BOM item");
+    }
+    return getBomDetail(itemId, type);
+  } catch (e) {
+    Logger.log('Exception in removeBomItem: ' + e);
+    throw e;
+  }
+}
+
+// ==========================================
+// Test Functions: Module B (Products & Ingredients)
+// ==========================================
+
+function testGetModuleBData() {
+  var data = getModuleBData();
+  Logger.log("Products count: " + data.products.length);
+  Logger.log("Categories count: " + data.categories.length);
+  Logger.log("Ingredients count: " + data.ingredients.length);
+  Logger.log("Units count: " + data.units.length);
+  Logger.log("SemiProducts count: " + data.semiProducts.length);
+
+  if (data.products.length > 0) {
+    var p = data.products[0];
+    Logger.log("Sample product: " + JSON.stringify(p));
+    Logger.log("Fields: " + Object.keys(p).join(", "));
+    if (p.product_id !== undefined) Logger.log("✅ product_id present");
+    if (p.product_name !== undefined) Logger.log("✅ product_name present");
+    if (p.category_id !== undefined) Logger.log("✅ category_id present");
+  }
+
+  if (data.categories.length > 0) {
+    var c = data.categories[0];
+    Logger.log("Sample category: " + JSON.stringify(c));
+    if (c.category_id !== undefined) Logger.log("✅ category_id present");
+    if (c.category_name !== undefined) Logger.log("✅ category_name present");
+  }
+
+  if (data.ingredients.length > 0) {
+    var i = data.ingredients[0];
+    Logger.log("Sample ingredient: " + JSON.stringify(i));
+    if (i.ingredient_id !== undefined) Logger.log("✅ ingredient_id present");
+    if (i.ingredient_name !== undefined) Logger.log("✅ ingredient_name present");
+    if (i.is_semi_product !== undefined) Logger.log("✅ is_semi_product present (value: " + i.is_semi_product + ")");
+    if (i.erp_inventory_product_code !== undefined) Logger.log("✅ erp_inventory_product_code present (value: " + i.erp_inventory_product_code + ")");
+  }
+
+  if (data.units.length > 0) {
+    var u = data.units[0];
+    Logger.log("Sample unit: " + JSON.stringify(u));
+    if (u.unit_id !== undefined) Logger.log("✅ unit_id present");
+    if (u.unit_name !== undefined) Logger.log("✅ unit_name present");
+  }
+
+  return data;
+}
+
+function testCreateAndUpdateUnit() {
+  Logger.log("=== Test: Create and Update Unit ===");
+
+  // Create
+  var testName = "測試單位_" + new Date().getTime();
+  Logger.log("Creating unit: " + testName);
+  var data1 = createUnit(testName);
+  var created = data1.units.find(function(u) { return u.unit_name === testName; });
+  if (created) {
+    Logger.log("✅ Unit created: " + JSON.stringify(created));
+  } else {
+    Logger.log("❌ Unit not found after creation");
+    return;
+  }
+
+  // Update
+  var updatedName = testName + "_updated";
+  Logger.log("Updating unit to: " + updatedName);
+  var data2 = updateUnit(created.unit_id, updatedName);
+  var updated = data2.units.find(function(u) { return u.unit_id === created.unit_id; });
+  if (updated && updated.unit_name === updatedName) {
+    Logger.log("✅ Unit updated: " + JSON.stringify(updated));
+  } else {
+    Logger.log("❌ Unit update failed");
+  }
+}
+
+function testCreateAndUpdateProduct() {
+  Logger.log("=== Test: Create and Update Product ===");
+
+  var data = getModuleBData();
+  if (data.categories.length === 0) {
+    Logger.log("No categories found. Cannot test.");
+    return;
+  }
+
+  var catId = data.categories[0].category_id;
+
+  // Create
+  var testName = "測試產品_" + new Date().getTime();
+  Logger.log("Creating product: " + testName + " (category: " + catId + ")");
+  var data1 = createNewProduct(testName, catId);
+  var created = data1.products.find(function(p) { return p.product_name === testName; });
+  if (created) {
+    Logger.log("✅ Product created: " + JSON.stringify(created));
+  } else {
+    Logger.log("❌ Product not found after creation");
+    return;
+  }
+
+  // Update
+  var updatedName = testName + "_updated";
+  Logger.log("Updating product to: " + updatedName);
+  var data2 = updateProduct(created.product_id, updatedName, catId);
+  var updated = data2.products.find(function(p) { return p.product_id === created.product_id; });
+  if (updated && updated.product_name === updatedName) {
+    Logger.log("✅ Product updated: " + JSON.stringify(updated));
+  } else {
+    Logger.log("❌ Product update failed");
+  }
+}
+
+function testBomCycle() {
+  Logger.log("=== Test: BOM Add and Remove Cycle ===");
+
+  var data = getModuleBData();
+  if (data.products.length === 0 || data.ingredients.length === 0 || data.units.length === 0) {
+    Logger.log("Not enough data to test BOM. Need products, ingredients, and units.");
+    return;
+  }
+
+  var productId = data.products[0].product_id;
+  var ingredientId = data.ingredients[0].ingredient_id;
+  var unitId = data.units[0].unit_id;
+
+  // Add BOM item
+  Logger.log("Adding BOM: product=" + productId + " ingredient=" + ingredientId + " qty=1 unit=" + unitId);
+  var result1 = addBomItem(productId, 'product', ingredientId, 1, unitId);
+  Logger.log("BOM count after add: " + result1.bom.length);
+
+  if (result1.bom.length > 0) {
+    var last = result1.bom[result1.bom.length - 1];
+    Logger.log("Last BOM item: " + JSON.stringify(last));
+    if (last.bom_id !== undefined) Logger.log("✅ bom_id present");
+    if (last.ingredient_name !== undefined) Logger.log("✅ ingredient_name enriched: " + last.ingredient_name);
+    if (last.unit_name !== undefined) Logger.log("✅ unit_name enriched: " + last.unit_name);
+
+    // Remove BOM item
+    Logger.log("Removing BOM item: " + last.bom_id);
+    var result2 = removeBomItem(last.bom_id, productId, 'product');
+    Logger.log("BOM count after remove: " + result2.bom.length);
+
+    var stillExists = result2.bom.find(function(b) { return b.bom_id === last.bom_id; });
+    if (!stillExists) {
+      Logger.log("✅ BOM item removed successfully");
+    } else {
+      Logger.log("❌ BOM item still exists after removal");
+    }
+  } else {
+    Logger.log("❌ No BOM items found after add");
+  }
+}
+
+function testIngredientCycle() {
+  Logger.log("=== Test: Ingredient Create / Edit / Delete ===");
+
+  // --- Create ---
+  var name = "測試食材_" + new Date().getTime();
+  Logger.log("Creating ingredient: " + name);
+  var createResult = createNewIngredient(name, "總部叫貨", "false");
+  if (!createResult || !createResult.success) {
+    Logger.log("❌ Create failed");
+    return;
+  }
+  Logger.log("✅ createNewIngredient returned success");
+
+  // 驗證：從 getModuleBData 找到新建的食材
+  var data1 = getModuleBData();
+  var created = data1.ingredients.find(function(i) { return i.ingredient_name === name; });
+  if (!created) {
+    Logger.log("❌ Ingredient not found after creation");
+    return;
+  }
+  Logger.log("✅ Ingredient created: " + JSON.stringify(created));
+  if (created.is_semi_product === false || String(created.is_semi_product).toLowerCase() === 'false') {
+    Logger.log("✅ is_semi_product = false (一般食材)");
+  } else {
+    Logger.log("❌ is_semi_product should be false, got: " + created.is_semi_product);
+  }
+  if (created.purchase_source === "總部叫貨") {
+    Logger.log("✅ purchase_source correct");
+  }
+
+  // --- Edit ---
+  var updatedName = name + "_edited";
+  Logger.log("\nUpdating ingredient to: " + updatedName + ", source=自行採購");
+  var data2 = updateIngredientDetails(created.ingredient_id, updatedName, "自行採購", "false");
+  var updated = data2.ingredients.find(function(i) { return i.ingredient_id === created.ingredient_id; });
+  if (updated && updated.ingredient_name === updatedName && updated.purchase_source === "自行採購") {
+    Logger.log("✅ Ingredient updated: " + JSON.stringify(updated));
+  } else {
+    Logger.log("❌ Update failed. Got: " + JSON.stringify(updated));
+  }
+
+  // --- Delete (soft) ---
+  Logger.log("\nDeleting ingredient id=" + created.ingredient_id);
+  var delResult = deleteRow_("ingredients", { id: created.ingredient_id }, "tb_mgmt");
+  if (delResult && delResult.ok) {
+    Logger.log("✅ deleteRow_ returned ok");
+  } else {
+    Logger.log("❌ deleteRow_ failed: " + JSON.stringify(delResult));
+  }
+
+  // 驗證：不再出現在 active 列表
+  var data3 = getModuleBData();
+  var stillExists = data3.ingredients.find(function(i) { return i.ingredient_id === created.ingredient_id; });
+  if (!stillExists) {
+    Logger.log("✅ Ingredient removed from active list (soft delete confirmed)");
+  } else {
+    Logger.log("❌ Ingredient still in active list after delete");
+  }
+
+  // 驗證：仍存在於資料庫（include_deleted）
+  var dbResp = fetchRow_("ingredients", "id", created.ingredient_id, "tb_mgmt", { include_deleted: true });
+  if (dbResp && dbResp.ok && dbResp.item) {
+    var statusIds = getStatusIds_();
+    if (dbResp.item.status_id === statusIds.inactive) {
+      Logger.log("✅ Record still in DB with status_id = inactive");
+    } else {
+      Logger.log("❌ Record in DB but status_id = " + dbResp.item.status_id);
+    }
+  } else {
+    Logger.log("❌ Record not found in DB at all");
+  }
+
+  Logger.log("\n=== Ingredient Cycle: DONE ===");
+}
+
+function testSemiProductCycle() {
+  Logger.log("=== Test: Semi-Product Create / Edit / Delete ===");
+
+  // --- Create (is_semi_product = true) ---
+  var name = "測試半成品_" + new Date().getTime();
+  Logger.log("Creating semi-product: " + name);
+  var createResult = createNewIngredient(name, "自行採購", "true");
+  if (!createResult || !createResult.success) {
+    Logger.log("❌ Create failed");
+    return;
+  }
+  Logger.log("✅ createNewIngredient returned success");
+
+  // 驗證：出現在 ingredients 和 semiProducts
+  var data1 = getModuleBData();
+  var created = data1.ingredients.find(function(i) { return i.ingredient_name === name; });
+  if (!created) {
+    Logger.log("❌ Semi-product not found in ingredients");
+    return;
+  }
+  Logger.log("✅ Found in ingredients: " + JSON.stringify(created));
+
+  if (created.is_semi_product === true || String(created.is_semi_product).toLowerCase() === 'true') {
+    Logger.log("✅ is_semi_product = true");
+  } else {
+    Logger.log("❌ is_semi_product should be true, got: " + created.is_semi_product);
+  }
+
+  var inSemiList = data1.semiProducts.find(function(s) { return s.ingredient_id === created.ingredient_id; });
+  if (inSemiList) {
+    Logger.log("✅ Also present in semiProducts list");
+  } else {
+    Logger.log("❌ NOT found in semiProducts list");
+  }
+
+  // --- Edit: 改名稱 + 切換為一般食材 ---
+  var updatedName = name + "_edited";
+  Logger.log("\nUpdating: name → " + updatedName + ", is_semi_product → false");
+  var data2 = updateIngredientDetails(created.ingredient_id, updatedName, "自行採購", "false");
+  var updated = data2.ingredients.find(function(i) { return i.ingredient_id === created.ingredient_id; });
+  if (updated && updated.ingredient_name === updatedName) {
+    Logger.log("✅ Name updated: " + updated.ingredient_name);
+  } else {
+    Logger.log("❌ Name update failed");
+  }
+
+  if (updated && (updated.is_semi_product === false || String(updated.is_semi_product).toLowerCase() === 'false')) {
+    Logger.log("✅ is_semi_product changed to false");
+  } else {
+    Logger.log("❌ is_semi_product should be false, got: " + (updated ? updated.is_semi_product : "N/A"));
+  }
+
+  var stillInSemi = data2.semiProducts.find(function(s) { return s.ingredient_id === created.ingredient_id; });
+  if (!stillInSemi) {
+    Logger.log("✅ Removed from semiProducts list after toggling to false");
+  } else {
+    Logger.log("❌ Still in semiProducts list after toggling to false");
+  }
+
+  // --- Edit: 切換回半成品 ---
+  Logger.log("\nToggling back: is_semi_product → true");
+  var data3 = updateIngredientDetails(created.ingredient_id, updatedName, "自行採購", "true");
+  var toggled = data3.semiProducts.find(function(s) { return s.ingredient_id === created.ingredient_id; });
+  if (toggled) {
+    Logger.log("✅ Re-appeared in semiProducts list");
+  } else {
+    Logger.log("❌ NOT in semiProducts list after toggling back to true");
+  }
+
+  // --- Delete (soft) ---
+  Logger.log("\nDeleting semi-product id=" + created.ingredient_id);
+  var delResult = deleteRow_("ingredients", { id: created.ingredient_id }, "tb_mgmt");
+  if (delResult && delResult.ok) {
+    Logger.log("✅ deleteRow_ returned ok");
+  } else {
+    Logger.log("❌ deleteRow_ failed");
+  }
+
+  var data4 = getModuleBData();
+  var inIngredients = data4.ingredients.find(function(i) { return i.ingredient_id === created.ingredient_id; });
+  var inSemi = data4.semiProducts.find(function(s) { return s.ingredient_id === created.ingredient_id; });
+  if (!inIngredients && !inSemi) {
+    Logger.log("✅ Removed from both ingredients and semiProducts (soft delete confirmed)");
+  } else {
+    Logger.log("❌ Still found after delete — ingredients: " + !!inIngredients + ", semiProducts: " + !!inSemi);
+  }
+
+  Logger.log("\n=== Semi-Product Cycle: DONE ===");
 }
 
 /* =========================================

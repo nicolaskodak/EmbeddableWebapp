@@ -11,46 +11,41 @@
  * @param {Object} row 資料列物件
  * @param {string[]} conflictColumns 衝突判斷欄位 (例如 ['id'] 或 ['name'])
  */
-/*
-function upsertRow_(table, row, conflictColumns) {
-  const payload = {
-    op: "upsert",
-    event_id: Utilities.getUuid(),
-    table: table,
-    row: row,
-    conflict_columns: conflictColumns
-  };
-  return callSupabaseEdgeJson_("post", null, payload);
-}
-*/
+// function upsertRow_(table, row, conflictColumns) {
+//   const payload = {
+//     op: "upsert",
+//     event_id: Utilities.getUuid(),
+//     table: table,
+//     row: row,
+//     conflict_columns: conflictColumns
+//   };
+//   return callSupabaseEdgeJson_("post", null, payload);
+// }
+
 /**
  * 通用 Delete (刪除)
  * @param {string} table 表格名稱
  * @param {Object} filter 刪除條件 (例如 { id: 123 } 或 { name: "apple" })
  */
- /*
-function deleteRow_(table, filter) {
-  const payload = {
-    op: "delete",
-    event_id: Utilities.getUuid(),
-    table: table,
-    filter: filter
-  };
-  return callSupabaseEdgeJson_("post", null, payload);
-}
-*/
+// function deleteRow_(table, filter) {
+//   const payload = {
+//     op: "delete",
+//     event_id: Utilities.getUuid(),
+//     table: table,
+//     filter: filter
+//   };
+//   return callSupabaseEdgeJson_("post", null, payload);
+// }
 
 /**
  * 通用 Fetch (查詢)
  * @param {string} table 表格名稱
  * @param {Object} queryParams 查詢參數 (例如 { limit: 10, col: "name", val: "apple" })
  */
- /*
-function fetchRows_(table, queryParams) {
-  const params = { table: table, ...queryParams };
-  return callSupabaseEdgeJson_("get", params, null);
-}
-*/
+// function fetchRows_(table, queryParams) {
+//   const params = { table: table, ...queryParams };
+//   return callSupabaseEdgeJson_("get", params, null);
+// }
 
 /**
  * 通用 Fetch Single Row (單筆查詢)
@@ -60,13 +55,11 @@ function fetchRows_(table, queryParams) {
  * @param {string} [schema] 可選的 schema (例如 'tb_mgmt')
  * @return {Object} Edge Function 回應 { ok: true, item: {...} } 或 { ok: true, item: null }
  */
- /*
-function fetchRow_(table, column, value, schema) {
-  const params = { table: table, col: column, val: value };
-  if (schema) { params.schema = schema; }
-  return callSupabaseEdgeJson_("get", params, null);
-}
-*/
+// function fetchRow_(table, column, value, schema) {
+//   const params = { table: table, col: column, val: value };
+//   if (schema) { params.schema = schema; }
+//   return callSupabaseEdgeJson_("get", params, null);
+// }
 
 // ==========================================
 // Test Functions: Items Table
@@ -309,6 +302,10 @@ function testStoreFieldMapping() {
     }
   }
 }
+
+// ==========================================
+// Test Functions: Module E (Inventory Details)
+// ==========================================
 
 
 function testGetModuleEData() {
