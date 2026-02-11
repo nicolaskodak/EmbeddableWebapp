@@ -495,170 +495,518 @@ function removeBomItem(bomId, itemId, type) {
 }
 
 /* =========================================
-   Module C: ERP 庫存對應
+   Module C: ERP 庫存對應 (Supabase)
    ========================================= */
+
 function getModuleCData() {
-  const ingredients = getTableData(DB_CONFIG.ingredients.name);
-  const units = getTableData(DB_CONFIG.units.name);
-  return { ingredients: ingredients, units: units };
+  try {
+    // 1) 查询 ingredients 表
+    var ingredientsResp = fetchRows_("ingredients", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var ingredients = (ingredientsResp && ingredientsResp.items) ? ingredientsResp.items : [];
+
+    // 2) 查询 units 表
+    var unitsResp = fetchRows_("units", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var units = (unitsResp && unitsResp.items) ? unitsResp.items : [];
+
+    // 3) 字段名转换（保持前端兼容）
+    var mappedIngredients = ingredients.map(function(ing) {
+      return {
+        ingredient_id: ing.id,  // id → ingredient_id
+        ingredient_name: ing.ingredient_name,
+        is_semi_product: ing.is_semi_product,
+        purchase_source: ing.purchase_source,
+        erp_inventory_id: ing.erp_inventory_id,  // 保持 FK ID
+        updated_at: ing.updated_at
+      };
+    });
+
+    var mappedUnits = units.map(function(u) {
+      return {
+        unit_id: u.id,  // id → unit_id
+        unit_name: u.unit_name,
+        updated_at: u.updated_at
+      };
+    });
+
+    return {
+      ingredients: mappedIngredients,
+      units: mappedUnits
+    };
+  } catch (e) {
+    Logger.log('Exception in getModuleCData: ' + e);
+    return { ingredients: [], units: [] };
+  }
 }
 
 function searchErpInventory(query) {
-  const erpData = getTableData(DB_CONFIG.erp_inventory.name);
-  const units = getTableData(DB_CONFIG.units.name);
-  const conversions = getTableData(DB_CONFIG.unit_conversions.name);
+  try {
+    if (!query) return [];
 
-  if (!query) return [];
-  const lowerQ = query.toLowerCase();
-  
-  return erpData.filter(e => 
-    (e.erp_inventory_name && String(e.erp_inventory_name).toLowerCase().includes(lowerQ)) || 
-    (e.product_code && String(e.product_code).toLowerCase().includes(lowerQ))
-  ).slice(0, 20).map(e => {
-    const u = units.find(unit => String(unit.unit_id) === String(e.inventory_unit_id));
-    const existConv = conversions.find(c => String(c.erp_inventory_id) === String(e.erp_inventory_id));
-    return { 
-      ...e, 
-      unit_name: u ? u.unit_name : 'Unknown',
-      existing_conversion: existConv || null 
-    };
-  });
+    // 1) 查询 erp_inventory 表
+    var erpResp = fetchRows_("erp_inventory", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var erpData = (erpResp && erpResp.items) ? erpResp.items : [];
+
+    // 2) 查询 units 表
+    var unitsResp = fetchRows_("units", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var units = (unitsResp && unitsResp.items) ? unitsResp.items : [];
+
+    // 3) 查询 unit_conversions 表
+    var conversionsResp = fetchRows_("unit_conversions", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var conversions = (conversionsResp && conversionsResp.items) ? conversionsResp.items : [];
+
+    // 4) 在内存中过滤
+    var lowerQ = query.toLowerCase();
+    var filtered = erpData.filter(function(e) {
+      return (e.erp_inventory_name && String(e.erp_inventory_name).toLowerCase().indexOf(lowerQ) >= 0) ||
+             (e.product_code && String(e.product_code).toLowerCase().indexOf(lowerQ) >= 0);
+    }).slice(0, 20);
+
+    // 5) 关联数据并转换字段名
+    var result = filtered.map(function(e) {
+      var u = units.find(function(unit) {
+        return String(unit.id) === String(e.inventory_unit_id);
+      });
+
+      var existConv = conversions.find(function(c) {
+        return String(c.erp_inventory_id) === String(e.id);
+      });
+
+      // 字段名转换（保持前端兼容）
+      return {
+        erp_inventory_id: e.id,  // id → erp_inventory_id
+        product_code: e.product_code,
+        erp_inventory_name: e.erp_inventory_name,
+        inventory_unit_id: e.inventory_unit_id,
+        unit_name: u ? u.unit_name : 'Unknown',
+        existing_conversion: existConv ? {
+          id: existConv.id,
+          erp_inventory_id: existConv.erp_inventory_id,
+          warehouse_in_unit_id: existConv.warehouse_in_unit_id,
+          warehouse_in_quantity: existConv.warehouse_in_quantity,
+          warehouse_in_base_unit_id: existConv.warehouse_in_base_unit_id,
+          warehouse_out_unit_id: existConv.warehouse_out_unit_id,
+          warehouse_out_quantity: existConv.warehouse_out_quantity,
+          warehouse_out_base_unit_id: existConv.warehouse_out_base_unit_id
+        } : null,
+        updated_at: e.updated_at
+      };
+    });
+
+    return result;
+  } catch (e) {
+    Logger.log('Exception in searchErpInventory: ' + e);
+    return [];
+  }
 }
 
 function linkIngredientComplex(form) {
-  updateRow(DB_CONFIG.ingredients.name, 'ingredient_id', form.ingredientId, {
-    'erp_inventory_product_code': form.erpProductCode
-  });
-  
-  const erpData = getTableData(DB_CONFIG.erp_inventory.name).find(e => e.product_code == form.erpProductCode);
-  const erpInvId = erpData ? erpData.erp_inventory_id : 0;
-  
-  const conversions = getTableData(DB_CONFIG.unit_conversions.name);
-  const existConv = conversions.find(c => String(c.erp_inventory_id) === String(erpInvId));
-  
-  if (existConv) {
-     updateRow(DB_CONFIG.unit_conversions.name, 'erp_inventory_id', erpInvId, {
-        'warehouse_out_unit_id': form.whOutUnit,
-        'warehouse_out_quantity': form.whOutQty,
-        'warehouse_out_base_unit_id': form.erpInvUnitId,
-        'warehouse_in_unit_id': form.whInUnit,
-        'warehouse_in_quantity': form.whInQty,
-        'warehouse_in_base_unit_id': form.whInBaseUnit
-     });
-  } else {
-     const newId = getMaxId(DB_CONFIG.unit_conversions.name, 'id') + 1;
-     insertRow(DB_CONFIG.unit_conversions.name, {
-        'id': newId, 'erp_inventory_id': erpInvId,
-        'warehouse_out_unit_id': form.whOutUnit,
-        'warehouse_out_quantity': form.whOutQty,
-        'warehouse_out_base_unit_id': form.erpInvUnitId,
-        'warehouse_in_unit_id': form.whInUnit,
-        'warehouse_in_quantity': form.whInQty,
-        'warehouse_in_base_unit_id': form.whInBaseUnit
-     });
+  try {
+    form = form || {};
+
+    // 1) 查询 erp_inventory 获取 ID（前端传递 product_code）
+    var erpResp = fetchRow_("erp_inventory", "product_code", form.erpProductCode, "tb_mgmt");
+    if (!erpResp || !erpResp.ok || !erpResp.item) {
+      throw new Error("ERP inventory not found for product_code: " + form.erpProductCode);
+    }
+
+    var erpInventoryId = erpResp.item.id;
+
+    // 2) 获取 status IDs
+    var statusIds = getStatusIds_();
+
+    // 3) 更新 ingredient 的 erp_inventory_id
+    // NOTE: Must fetch existing row first because Supabase .upsert() treats
+    // missing fields as NULL, which violates NOT NULL constraints.
+    // We merge the new values with existing data before upserting.
+    var existingIngredientResp = fetchRow_("ingredients", "id", form.ingredientId, "tb_mgmt");
+
+    if (!existingIngredientResp || !existingIngredientResp.ok || !existingIngredientResp.item) {
+      throw new Error("Ingredient not found for id: " + form.ingredientId);
+    }
+
+    var existingIngredient = existingIngredientResp.item;
+
+    // Merge: Keep all existing fields, update only erp_inventory_id
+    var ingredientRow = {
+      id: existingIngredient.id,
+      ingredient_name: existingIngredient.ingredient_name,  // Preserve existing
+      is_semi_product: existingIngredient.is_semi_product,  // Preserve existing
+      purchase_source: existingIngredient.purchase_source,  // Preserve existing
+      erp_inventory_id: erpInventoryId,  // UPDATE: New value
+      status_id: existingIngredient.status_id,  // Preserve existing
+      updated_at: new Date().toISOString()  // UPDATE: New timestamp
+    };
+
+    var updateIngredientResult = upsertRow_(
+      "ingredients",
+      ingredientRow,
+      ["id"],
+      "tb_mgmt"
+    );
+
+    if (!updateIngredientResult || !updateIngredientResult.ok) {
+      throw new Error("Failed to update ingredient");
+    }
+
+    // 4) 检查是否已存在 unit_conversion
+    var existingConvResp = fetchRow_("unit_conversions", "erp_inventory_id", erpInventoryId, "tb_mgmt");
+
+    var conversionRow = {
+      erp_inventory_id: erpInventoryId,
+      warehouse_out_unit_id: form.whOutUnit || null,
+      warehouse_out_quantity: form.whOutQty || null,
+      warehouse_out_base_unit_id: form.erpInvUnitId || null,
+      warehouse_in_unit_id: form.whInUnit || null,
+      warehouse_in_quantity: form.whInQty || null,
+      warehouse_in_base_unit_id: form.whInBaseUnit || null,
+      status_id: statusIds.active,
+      updated_at: new Date().toISOString()
+    };
+
+    // 5) Upsert unit_conversion（基于 erp_inventory_id UNIQUE 约束）
+    var conversionResult = upsertRow_(
+      "unit_conversions",
+      conversionRow,
+      ["erp_inventory_id"],
+      "tb_mgmt"
+    );
+
+    if (!conversionResult || !conversionResult.ok) {
+      throw new Error("Failed to upsert unit_conversion");
+    }
+
+    return { success: true };
+  } catch (e) {
+    Logger.log('Exception in linkIngredientComplex: ' + e);
+    throw e;
   }
-  return { success: true };
+}
+
+// ==========================================
+// Test Functions: Module C (ERP Inventory Mapping)
+// ==========================================
+
+function testGetModuleCData() {
+  var data = getModuleCData();
+  Logger.log("Ingredients count: " + data.ingredients.length);
+  Logger.log("Units count: " + data.units.length);
+
+  if (data.ingredients.length > 0) {
+    Logger.log("Sample ingredient: " + JSON.stringify(data.ingredients[0]));
+    Logger.log("Ingredient fields: " + Object.keys(data.ingredients[0]).join(", "));
+
+    // 验证字段名转换
+    var sample = data.ingredients[0];
+    if (sample.ingredient_id !== undefined) {
+      Logger.log("✅ Field mapped correctly: id → ingredient_id");
+    } else {
+      Logger.log("❌ Field mapping failed: ingredient_id not found");
+    }
+  }
+
+  if (data.units.length > 0) {
+    Logger.log("Sample unit: " + JSON.stringify(data.units[0]));
+
+    var sampleUnit = data.units[0];
+    if (sampleUnit.unit_id !== undefined) {
+      Logger.log("✅ Field mapped correctly: id → unit_id");
+    } else {
+      Logger.log("❌ Field mapping failed: unit_id not found");
+    }
+  }
+
+  return data;
+}
+
+function testSearchErpInventory() {
+  // 测试搜索功能
+  var query = "豬排";  // 搜索关键字
+
+  Logger.log("Searching for: " + query);
+  var results = searchErpInventory(query);
+  Logger.log("Search results count: " + results.length);
+
+  if (results.length > 0) {
+    Logger.log("Sample result: " + JSON.stringify(results[0]));
+    Logger.log("Result fields: " + Object.keys(results[0]).join(", "));
+
+    var sample = results[0];
+
+    // 验证字段
+    if (sample.erp_inventory_id !== undefined) {
+      Logger.log("✅ Field present: erp_inventory_id");
+    }
+
+    if (sample.product_code !== undefined) {
+      Logger.log("✅ Field present: product_code");
+    }
+
+    if (sample.unit_name !== undefined) {
+      Logger.log("✅ Unit name mapped: " + sample.unit_name);
+    }
+
+    if (sample.existing_conversion !== undefined) {
+      Logger.log("✅ Conversion data present: " + (sample.existing_conversion ? "Yes" : "No"));
+      if (sample.existing_conversion) {
+        Logger.log("  Conversion details: " + JSON.stringify(sample.existing_conversion));
+      }
+    }
+  } else {
+    Logger.log("⚠️ No results found. Try a different search query.");
+  }
+
+  return results;
+}
+
+function testLinkIngredientComplex() {
+  // 测试关联 ingredient 到 erp_inventory
+  // 需要先准备测试数据
+
+  // 1) 获取第一个 ingredient
+  var moduleCData = getModuleCData();
+  if (moduleCData.ingredients.length === 0) {
+    Logger.log("No ingredients found. Cannot test.");
+    return null;
+  }
+
+  var testIngredient = moduleCData.ingredients[0];
+  Logger.log("Testing with ingredient: " + JSON.stringify(testIngredient));
+
+  // 2) 搜索一个 erp_inventory
+  var searchResults = searchErpInventory("豬");
+  if (searchResults.length === 0) {
+    Logger.log("No ERP inventory found. Cannot test.");
+    return null;
+  }
+
+  var testErp = searchResults[0];
+  Logger.log("Testing with ERP inventory: " + JSON.stringify(testErp));
+
+  // 3) 获取 units 用于测试
+  if (moduleCData.units.length === 0) {
+    Logger.log("No units found. Cannot test.");
+    return null;
+  }
+
+  var testUnit = moduleCData.units[0];
+  Logger.log("Testing with unit: " + JSON.stringify(testUnit));
+
+  // 4) 构造测试表单
+  var form = {
+    ingredientId: testIngredient.ingredient_id,
+    erpProductCode: testErp.product_code,
+    whOutUnit: testUnit.unit_id,
+    whOutQty: 100,
+    erpInvUnitId: testErp.inventory_unit_id,
+    whInUnit: testUnit.unit_id,
+    whInQty: 1,
+    whInBaseUnit: testErp.inventory_unit_id
+  };
+
+  Logger.log("Linking with form: " + JSON.stringify(form));
+
+  // 5) 执行关联
+  var result = linkIngredientComplex(form);
+  Logger.log("Link result: " + JSON.stringify(result));
+
+  if (result && result.success) {
+    Logger.log("✅ Link successful");
+
+    // 验证关联结果
+    var updatedIngredient = fetchRow_("ingredients", "id", testIngredient.ingredient_id, "tb_mgmt");
+    if (updatedIngredient && updatedIngredient.ok && updatedIngredient.item) {
+      Logger.log("  Updated ingredient erp_inventory_id: " + updatedIngredient.item.erp_inventory_id);
+
+      // 验证 unit_conversion
+      var conversionResp = fetchRow_("unit_conversions", "erp_inventory_id", updatedIngredient.item.erp_inventory_id, "tb_mgmt");
+      if (conversionResp && conversionResp.ok && conversionResp.item) {
+        Logger.log("✅ Unit conversion created/updated:");
+        Logger.log("  " + JSON.stringify(conversionResp.item));
+      } else {
+        Logger.log("❌ Unit conversion not found");
+      }
+    }
+  } else {
+    Logger.log("❌ Link failed");
+  }
+
+  return result;
+}
+
+function testModuleCFieldMapping() {
+  // 测试字段映射是否正确
+  Logger.log("=== Testing Module C Field Mapping ===");
+
+  // 1. 直接查询数据库（原始数据）
+  var rawIngredientsResp = fetchRows_("ingredients", {
+    limit: 5,
+    schema: "tb_mgmt",
+    include_deleted: "false"
+  });
+
+  if (!rawIngredientsResp || !rawIngredientsResp.ok || rawIngredientsResp.items.length === 0) {
+    Logger.log("No ingredients in database");
+    return;
+  }
+
+  var rawIngredient = rawIngredientsResp.items[0];
+  Logger.log("\n1. Raw ingredient data (from database):");
+  Logger.log("  id: " + rawIngredient.id + " (type: " + typeof rawIngredient.id + ")");
+  Logger.log("  ingredient_name: " + rawIngredient.ingredient_name);
+
+  // 2. 通过 getModuleCData 获取映射后的数据
+  var moduleCData = getModuleCData();
+  var mappedIngredient = moduleCData.ingredients.find(function(ing) {
+    return ing.ingredient_id === rawIngredient.id;
+  });
+
+  if (mappedIngredient) {
+    Logger.log("\n2. Mapped ingredient data (after getModuleCData):");
+    Logger.log("  ingredient_id: " + mappedIngredient.ingredient_id + " (type: " + typeof mappedIngredient.ingredient_id + ")");
+    Logger.log("  ingredient_name: " + mappedIngredient.ingredient_name);
+
+    // 3. 验证映射
+    if (mappedIngredient.ingredient_id === rawIngredient.id) {
+      Logger.log("✅ id → ingredient_id mapping correct");
+    } else {
+      Logger.log("❌ id → ingredient_id mapping incorrect");
+    }
+  }
+
+  // 测试 units 映射
+  var rawUnitsResp = fetchRows_("units", {
+    limit: 5,
+    schema: "tb_mgmt",
+    include_deleted: "false"
+  });
+
+  if (rawUnitsResp && rawUnitsResp.ok && rawUnitsResp.items.length > 0) {
+    var rawUnit = rawUnitsResp.items[0];
+    Logger.log("\n3. Raw unit data (from database):");
+    Logger.log("  id: " + rawUnit.id);
+
+    var mappedUnit = moduleCData.units.find(function(u) {
+      return u.unit_id === rawUnit.id;
+    });
+
+    if (mappedUnit && mappedUnit.unit_id === rawUnit.id) {
+      Logger.log("✅ id → unit_id mapping correct");
+    } else {
+      Logger.log("❌ id → unit_id mapping incorrect");
+    }
+  }
 }
 
 
 /* =========================================
-   Module D: 門市對應
+   Module D: 門市對應 (Supabase stores)
    ========================================= */
-
-function getStoreSheet_() {
-  var sheetId = PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID');
-  if (!sheetId) {
-    throw new Error('請在專案屬性中設定 STORE_SHEET_ID');
-  }
-  
-  var ss = SpreadsheetApp.openById(sheetId);
-  var sheet = ss.getSheetByName('data') || ss.insertSheet('data');
-  
-  // 確保有標題列
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
-    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
-  }
-
-  ensureStoreSheetSchema_(sheet);
-  
-  return sheet;
-}
-
-function ensureStoreSheetSchema_(sheet) {
-  if (!sheet) return;
-
-  var lastCol = sheet.getLastColumn();
-  if (lastCol === 0) {
-    sheet.appendRow(['id', 'erp_customer_name', 'pos_store_name', 'address_zhtw', 'address_en', 'country', 'city', 'district', 'latitude', 'longitude', 'store_status', 'store_type']);
-    sheet.getRange(1, 1, 1, 12).setFontWeight('bold');
-    return;
-  }
-
-  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
-    return String(h || '').trim();
-  });
-
-  var idColIndex = headers.indexOf('id');
-  if (idColIndex === -1) {
-    idColIndex = headers.length;
-    sheet.insertColumnAfter(lastCol);
-    sheet.getRange(1, idColIndex + 1).setValue('id').setFontWeight('bold');
-    headers.push('id');
-  }
-
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-
-  var idRange = sheet.getRange(2, idColIndex + 1, lastRow - 1, 1);
-  var idValues = idRange.getValues();
-  var changed = false;
-  for (var i = 0; i < idValues.length; i++) {
-    var v = String(idValues[i][0] || '').trim();
-    if (!v) {
-      idValues[i][0] = Utilities.getUuid();
-      changed = true;
-    }
-  }
-  if (changed) idRange.setValues(idValues);
-}
 
 function getModuleDData() {
   try {
-    var sheet = getStoreSheet_();
-    ensureStoreSheetSchema_(sheet);
+    // 1) 查询 stores 表
+    var storesResp = fetchRows_("stores", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
 
-    var lastRow = sheet.getLastRow();
-    var lastCol = sheet.getLastColumn();
-    if (lastRow < 2 || lastCol === 0) return [];
-
-    var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-    var headers = values[0].map(function (h) { return String(h || '').trim(); });
-
-    var items = [];
-    for (var r = 1; r < values.length; r++) {
-      var row = values[r];
-      var obj = {};
-      for (var c = 0; c < headers.length; c++) {
-        var key = headers[c];
-        if (!key) continue;
-        obj[key] = row[c];
-      }
-
-      // 前端依賴 id
-      obj.id = String(obj.id || '').trim();
-      if (!obj.id) {
-        obj.id = Utilities.getUuid();
-      }
-
-      // 一些預設
-      if (!obj.store_status) obj.store_status = 'active';
-      if (!obj.country) obj.country = '台灣';
-
-      items.push(obj);
+    if (!storesResp || !storesResp.ok) {
+      Logger.log("Warning: Failed to fetch stores from Supabase");
+      return [];
     }
 
-    return items;
+    var stores = (storesResp && storesResp.items) ? storesResp.items : [];
+
+    // 2) 查询 pos_stores 表（获取所有 POS 门店名称）
+    var posStoresResp = fetchRows_("pos_stores", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var posStores = (posStoresResp && posStoresResp.items) ? posStoresResp.items : [];
+
+    // 建立 id -> pos_store_name 映射
+    var posStoreMap = {};
+    posStores.forEach(function(ps) {
+      posStoreMap[String(ps.id)] = ps.pos_store_name;
+    });
+
+    // 3) 查询 erp_customers 表（获取所有 ERP 客户名称）
+    var erpCustomersResp = fetchRows_("erp_customers", {
+      limit: 200,
+      schema: "tb_mgmt",
+      include_deleted: "false"
+    });
+
+    var erpCustomers = (erpCustomersResp && erpCustomersResp.items) ? erpCustomersResp.items : [];
+
+    // 建立 id -> erp_customer_name 映射
+    var erpCustomerMap = {};
+    erpCustomers.forEach(function(ec) {
+      erpCustomerMap[String(ec.id)] = ec.erp_customer_name;
+    });
+
+    // 4) 获取 status IDs 用于映射
+    var statusIds = getStatusIds_();
+
+    // 5) 关联数据并转换
+    var result = stores.map(function(s) {
+      // 将 status_id 转换为 store_status（保持前端接口不变）
+      var storeStatus = 'active';
+      if (s.status_id === statusIds.inactive) {
+        storeStatus = 'inactive';
+      }
+
+      // 从映射中获取 TEXT 名称（stores 表存储的是 FK ID）
+      var posStoreName = s.pos_store_name ? (posStoreMap[String(s.pos_store_name)] || null) : null;
+      var erpCustomerName = erpCustomerMap[String(s.erp_customer_name)] || null;
+
+      // 返回前端需要的格式
+      return {
+        id: s.id,
+        erp_customer_name: erpCustomerName,  // TEXT（从 FK 转换而来）
+        pos_store_name: posStoreName,  // TEXT（从 FK 转换而来）
+        address_zh: s.address_zh,  // 修正字段名
+        address_en: s.address_en,
+        country: s.country || '台灣',
+        city: s.city,
+        district: s.district,
+        latitude: s.latitude,
+        longitude: s.longitude,
+        store_status: storeStatus,
+        store_type: s.store_type,
+        updated_at: s.updated_at
+      };
+    });
+
+    return result;
   } catch (e) {
     Logger.log('Exception in getModuleDData: ' + e);
     return [];
@@ -667,27 +1015,128 @@ function getModuleDData() {
 
 function updateStoreDetails(form) {
   try {
-    var sheet = getStoreSheet_();
-    ensureStoreSheetSchema_(sheet);
-
     form = form || {};
-    var payload = {
-      id: form.id,
-      erp_customer_name: form.erp_customer_name,
-      pos_store_name: form.pos_store_name,
-      address_zhtw: form.address_zhtw,
-      address_en: form.address_en,
-      country: form.country,
-      city: form.city,
-      district: form.district,
-      latitude: form.latitude,
-      longitude: form.longitude,
-      store_status: form.store_status,
-      store_type: form.store_type
+
+    // 1) 获取 status IDs
+    var statusIds = getStatusIds_();
+
+    // 2) 将 store_status 转换为 status_id（保持前端接口不变）
+    var statusId = statusIds.active; // 默认
+    if (form.store_status === 'inactive') {
+      statusId = statusIds.inactive;
+    }
+
+    // 3) 处理 pos_store_name (TEXT -> ID)
+    // 前端传递 TEXT，需要转换为 FK ID
+    var posStoreId = null;
+    if (form.pos_store_name) {
+      // 查询或创建 pos_store
+      var posStoreResp = fetchRow_("pos_stores", "pos_store_name", form.pos_store_name, "tb_mgmt");
+
+      if (posStoreResp && posStoreResp.ok && posStoreResp.item) {
+        // 已存在，使用现有 ID
+        posStoreId = posStoreResp.item.id;
+      } else {
+        // 不存在，创建新的 pos_store
+        var newPosStore = upsertRow_(
+          "pos_stores",
+          {
+            pos_store_name: form.pos_store_name,
+            status_id: statusIds.active,
+            updated_at: new Date().toISOString()
+          },
+          ["pos_store_name"],
+          "tb_mgmt"
+        );
+
+        // 重新查询获取 ID
+        posStoreResp = fetchRow_("pos_stores", "pos_store_name", form.pos_store_name, "tb_mgmt");
+        if (posStoreResp && posStoreResp.ok && posStoreResp.item) {
+          posStoreId = posStoreResp.item.id;
+        } else {
+          Logger.log("Warning: Failed to get pos_store ID after upsert");
+        }
+      }
+    }
+
+    // 4) 处理 erp_customer_name (TEXT -> ID)
+    // 前端传递 TEXT，需要转换为 FK ID
+    var erpCustomerId = null;
+    if (form.erp_customer_name) {
+      // 查询或创建 erp_customer
+      var erpCustomerResp = fetchRow_("erp_customers", "erp_customer_name", form.erp_customer_name, "tb_mgmt");
+
+      if (erpCustomerResp && erpCustomerResp.ok && erpCustomerResp.item) {
+        // 已存在，使用现有 ID
+        erpCustomerId = erpCustomerResp.item.id;
+      } else {
+        // 不存在，创建新的 erp_customer
+        var newErpCustomer = upsertRow_(
+          "erp_customers",
+          {
+            erp_customer_name: form.erp_customer_name,
+            status_id: statusIds.active,
+            updated_at: new Date().toISOString()
+          },
+          ["erp_customer_name"],
+          "tb_mgmt"
+        );
+
+        // 重新查询获取 ID
+        erpCustomerResp = fetchRow_("erp_customers", "erp_customer_name", form.erp_customer_name, "tb_mgmt");
+        if (erpCustomerResp && erpCustomerResp.ok && erpCustomerResp.item) {
+          erpCustomerId = erpCustomerResp.item.id;
+        } else {
+          throw new Error("Failed to get erp_customer ID after upsert");
+        }
+      }
+    }
+
+    if (!erpCustomerId) {
+      throw new Error("erp_customer_name is required");
+    }
+
+    // 5) 准备 stores 表数据
+    var row = {
+      erp_customer_name: erpCustomerId,  // BIGINT FK (required)
+      pos_store_name: posStoreId,  // BIGINT FK (可以为 null)
+      address_zh: form.address_zh || null,  // 修正字段名
+      address_en: form.address_en || null,
+      country: form.country || '台灣',
+      city: form.city || null,
+      district: form.district || null,
+      latitude: form.latitude || null,
+      longitude: form.longitude || null,
+      store_type: form.store_type || null,
+      status_id: statusId,
+      updated_at: new Date().toISOString()
     };
 
-    var result = upsertStoreRow_(sheet, payload);
+    // 6) 确定 conflict key
+    // 如果有 id，基于 id 更新；否则基于 erp_customer_name（UNIQUE 约束）
+    var conflictKey;
+    if (form.id) {
+      row.id = form.id;
+      conflictKey = ["id"];
+    } else {
+      conflictKey = ["erp_customer_name"];
+    }
+
+    // 7) 使用 upsertRow_ helper
+    var result = upsertRow_(
+      "stores",
+      row,
+      conflictKey,
+      "tb_mgmt"
+    );
+
+    if (!result || !result.ok) {
+      throw new Error("Failed to upsert store");
+    }
+
     Logger.log('Store upsert: ' + JSON.stringify(result));
+
+    // 8) 返回更新后的数据
     return getModuleDData();
   } catch (e) {
     Logger.log('Exception in updateStoreDetails: ' + e);
@@ -696,104 +1145,239 @@ function updateStoreDetails(form) {
 }
 
 function deleteStore(id) {
-  var sheet = getStoreSheet_();
-  ensureStoreSheetSchema_(sheet);
-  return deleteStoreRowById_(sheet, id);
-}
-
-function getStoreHeaders_(sheet) {
-  var lastCol = sheet.getLastColumn();
-  if (lastCol === 0) return [];
-  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
-    return String(h || '').trim();
-  });
-}
-
-function getHeaderIndexMap_(headers) {
-  var map = {};
-  headers.forEach(function (h, idx) {
-    if (h) map[h] = idx;
-  });
-  return map;
-}
-
-function normalizeStoreRow_(obj) {
-  if (!obj) obj = {};
-  if (obj.store_status === undefined || obj.store_status === null || obj.store_status === '') obj.store_status = 'active';
-  if (obj.country === undefined || obj.country === null || obj.country === '') obj.country = '台灣';
-  return obj;
-}
-
-function upsertStoreRow_(sheet, obj) {
-  obj = normalizeStoreRow_(obj);
-  var headers = getStoreHeaders_(sheet);
-  var idx = getHeaderIndexMap_(headers);
-  var idCol = idx.id;
-  if (idCol === undefined) throw new Error('stores sheet 缺少 id 欄位');
-
-  var id = String(obj.id || '').trim();
   if (!id) {
-    id = Utilities.getUuid();
-    obj.id = id;
+    throw new Error("Missing store id");
   }
 
-  var lastRow = sheet.getLastRow();
-  var targetRow = -1;
-  if (lastRow >= 2) {
-    var idValues = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < idValues.length; i++) {
-      if (String(idValues[i][0] || '').trim() === id) {
-        targetRow = i + 2;
-        break;
-      }
-    }
+  // 使用 deleteRow_ 进行软删除（更新 status_id = inactive）
+  var result = deleteRow_("stores", { id: id }, "tb_mgmt");
+
+  if (!result || !result.ok) {
+    throw new Error("Failed to delete store");
   }
 
-  // 僅更新既有欄位；忽略未知欄位
-  function setCell(rowNum, key, value) {
-    var c = idx[key];
-    if (c === undefined) return;
-    sheet.getRange(rowNum, c + 1).setValue(value === undefined ? '' : value);
-  }
-
-  if (targetRow === -1) {
-    // 新增
-    var newRow = headers.map(function (h) {
-      return obj[h] === undefined ? '' : obj[h];
-    });
-    sheet.appendRow(newRow);
-    return { ok: true, op: 'insert', id: id };
-  }
-
-  // 更新
-  Object.keys(obj).forEach(function (k) {
-    // 只有明確提供的欄位才覆寫；避免前端沒送的欄位被清空
-    if (obj[k] === undefined) return;
-    setCell(targetRow, k, obj[k]);
-  });
-  return { ok: true, op: 'update', id: id };
+  return { ok: true, deleted: 1, id: id };
 }
 
-function deleteStoreRowById_(sheet, id) {
-  var headers = getStoreHeaders_(sheet);
-  var idx = getHeaderIndexMap_(headers);
-  var idCol = idx.id;
-  if (idCol === undefined) throw new Error('stores sheet 缺少 id 欄位');
+// ==========================================
+// Test Functions: Module D (Stores)
+// ==========================================
 
-  var targetId = String(id || '').trim();
-  if (!targetId) return { ok: false, error: 'missing id' };
+function testGetModuleDData() {
+  var stores = getModuleDData();
+  Logger.log("Total stores: " + stores.length);
 
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, deleted: 0 };
+  if (stores.length > 0) {
+    Logger.log("Sample store: " + JSON.stringify(stores[0]));
+    Logger.log("Fields: " + Object.keys(stores[0]).join(", "));
 
-  var idValues = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < idValues.length; i++) {
-    if (String(idValues[i][0] || '').trim() === targetId) {
-      sheet.deleteRow(i + 2);
-      return { ok: true, deleted: 1, id: targetId };
+    // 验证字段类型
+    var sample = stores[0];
+    Logger.log("erp_customer_name type: " + typeof sample.erp_customer_name + " (should be string)");
+    Logger.log("pos_store_name type: " + typeof sample.pos_store_name + " (should be string or null)");
+  }
+
+  return stores;
+}
+
+function testCreateStore() {
+  // 测试新增门店（会自动创建 erp_customer 和 pos_store）
+  var form = {
+    erp_customer_name: "测试客户 " + new Date().getTime(),
+    pos_store_name: "测试 POS 门店 " + new Date().getTime(),
+    address_zh: "台北市信义区信义路五段7号",
+    address_en: "No.7, Sec. 5, Xinyi Rd., Xinyi Dist., Taipei City",
+    country: "台灣",
+    city: "台北市",
+    district: "信义区",
+    latitude: 25.033,
+    longitude: 121.565,
+    store_type: "direct",
+    store_status: "active"
+  };
+
+  Logger.log("Creating store with form: " + JSON.stringify(form));
+  var result = updateStoreDetails(form);
+  Logger.log("Create result - total stores: " + result.length);
+
+  // 查找刚创建的门店
+  var newStore = result.find(function(s) {
+    return s.erp_customer_name === form.erp_customer_name;
+  });
+
+  if (newStore) {
+    Logger.log("✅ Store created successfully:");
+    Logger.log("  ID: " + newStore.id);
+    Logger.log("  ERP Customer: " + newStore.erp_customer_name);
+    Logger.log("  POS Store: " + newStore.pos_store_name);
+    Logger.log("  Status: " + newStore.store_status);
+  } else {
+    Logger.log("❌ Failed to find newly created store");
+  }
+
+  return result;
+}
+
+function testUpdateStore() {
+  // 测试更新门店（基于 id）
+  // 先获取第一个门店
+  var stores = getModuleDData();
+
+  if (stores.length === 0) {
+    Logger.log("No stores found. Please create a store first using testCreateStore()");
+    return null;
+  }
+
+  var targetStore = stores[0];
+  Logger.log("Updating store ID: " + targetStore.id);
+  Logger.log("Current data: " + JSON.stringify(targetStore));
+
+  var form = {
+    id: targetStore.id,
+    erp_customer_name: targetStore.erp_customer_name,
+    pos_store_name: targetStore.pos_store_name,
+    address_zh: "更新后的地址：台北市大安区 " + new Date().getTime(),
+    address_en: "Updated Address: Daan District, Taipei",
+    country: "台灣",
+    city: "台北市",
+    district: "大安区",
+    store_type: "franchise",  // 改变类型
+    store_status: "active"
+  };
+
+  var result = updateStoreDetails(form);
+  Logger.log("Update result - total stores: " + result.length);
+
+  // 查找更新后的门店
+  var updatedStore = result.find(function(s) {
+    return s.id === targetStore.id;
+  });
+
+  if (updatedStore) {
+    Logger.log("✅ Store updated successfully:");
+    Logger.log("  Address changed: " + targetStore.address_zh + " → " + updatedStore.address_zh);
+    Logger.log("  Type changed: " + targetStore.store_type + " → " + updatedStore.store_type);
+  } else {
+    Logger.log("❌ Failed to find updated store");
+  }
+
+  return result;
+}
+
+function testDeleteStore() {
+  // 测试软删除门店
+  var stores = getModuleDData();
+
+  if (stores.length === 0) {
+    Logger.log("No stores found. Please create a store first using testCreateStore()");
+    return null;
+  }
+
+  // 找一个测试门店（名称包含"测试"的）
+  var testStore = stores.find(function(s) {
+    return s.erp_customer_name && s.erp_customer_name.indexOf("测试") >= 0;
+  });
+
+  if (!testStore) {
+    Logger.log("No test store found. Using first store instead.");
+    testStore = stores[0];
+  }
+
+  Logger.log("Deleting store ID: " + testStore.id);
+  Logger.log("Store name: " + testStore.erp_customer_name);
+
+  var deleteResult = deleteStore(testStore.id);
+  Logger.log("Delete result: " + JSON.stringify(deleteResult));
+
+  // 验证门店已被软删除（不再出现在列表中）
+  var storesAfter = getModuleDData();
+  var stillExists = storesAfter.find(function(s) {
+    return s.id === testStore.id;
+  });
+
+  if (!stillExists) {
+    Logger.log("✅ Store soft-deleted successfully - no longer appears in active list");
+    Logger.log("  Stores before: " + stores.length);
+    Logger.log("  Stores after: " + storesAfter.length);
+  } else {
+    Logger.log("❌ Store still appears in active list");
+  }
+
+  // 验证记录仍存在于数据库（使用 include_deleted）
+  var allStoresResp = fetchRows_("stores", {
+    limit: 200,
+    schema: "tb_mgmt",
+    include_deleted: "true"
+  });
+
+  if (allStoresResp && allStoresResp.ok) {
+    var allStores = allStoresResp.items || [];
+    var deletedStore = allStores.find(function(s) {
+      return s.id === testStore.id;
+    });
+
+    if (deletedStore) {
+      Logger.log("✅ Record still exists in database (soft delete confirmed)");
+
+      var statusIds = getStatusIds_();
+      if (deletedStore.status_id === statusIds.inactive) {
+        Logger.log("✅ status_id correctly set to inactive");
+      } else {
+        Logger.log("❌ status_id not set to inactive: " + deletedStore.status_id);
+      }
+    } else {
+      Logger.log("❌ Record not found in database (should still exist)");
     }
   }
-  return { ok: true, deleted: 0, id: targetId };
+
+  return deleteResult;
+}
+
+function testStoreFieldMapping() {
+  // 测试字段映射是否正确（FK ID → TEXT 名称）
+  Logger.log("=== Testing Store Field Mapping ===");
+
+  // 1. 直接查询 stores 表（原始数据，包含 FK ID）
+  var rawStoresResp = fetchRows_("stores", {
+    limit: 5,
+    schema: "tb_mgmt",
+    include_deleted: "false"
+  });
+
+  if (!rawStoresResp || !rawStoresResp.ok || rawStoresResp.items.length === 0) {
+    Logger.log("No stores in database");
+    return;
+  }
+
+  var rawStore = rawStoresResp.items[0];
+  Logger.log("\n1. Raw store data (from database):");
+  Logger.log("  erp_customer_name (FK): " + rawStore.erp_customer_name + " (type: " + typeof rawStore.erp_customer_name + ")");
+  Logger.log("  pos_store_name (FK): " + rawStore.pos_store_name + " (type: " + typeof rawStore.pos_store_name + ")");
+
+  // 2. 通过 getModuleDData 获取映射后的数据
+  var mappedStores = getModuleDData();
+  var mappedStore = mappedStores.find(function(s) {
+    return s.id === rawStore.id;
+  });
+
+  if (mappedStore) {
+    Logger.log("\n2. Mapped store data (after getModuleDData):");
+    Logger.log("  erp_customer_name (TEXT): " + mappedStore.erp_customer_name + " (type: " + typeof mappedStore.erp_customer_name + ")");
+    Logger.log("  pos_store_name (TEXT): " + mappedStore.pos_store_name + " (type: " + typeof mappedStore.pos_store_name + ")");
+
+    // 3. 验证映射
+    if (typeof mappedStore.erp_customer_name === 'string') {
+      Logger.log("✅ erp_customer_name correctly mapped to TEXT");
+    } else {
+      Logger.log("❌ erp_customer_name not mapped to TEXT");
+    }
+
+    if (mappedStore.pos_store_name === null || typeof mappedStore.pos_store_name === 'string') {
+      Logger.log("✅ pos_store_name correctly mapped to TEXT or null");
+    } else {
+      Logger.log("❌ pos_store_name not mapped to TEXT: " + typeof mappedStore.pos_store_name);
+    }
+  }
 }
 
 
