@@ -47,6 +47,20 @@ function fetchRows_(table, queryParams) {
   return callSupabaseEdgeJson_("get", params, null);
 }
 
+/**
+ * 通用 Fetch Single Row (單筆查詢)
+ * @param {string} table 表格名稱
+ * @param {string} column 查詢欄位名稱
+ * @param {*} value 查詢值
+ * @param {string} [schema] 可選的 schema (例如 'tb_mgmt')
+ * @return {Object} Edge Function 回應 { ok: true, item: {...} } 或 { ok: true, item: null }
+ */
+function fetchRow_(table, column, value, schema) {
+  const params = { table: table, col: column, val: value };
+  if (schema) { params.schema = schema; }
+  return callSupabaseEdgeJson_("get", params, null);
+}
+
 // ==========================================
 // Test Functions: Items Table
 // ==========================================
@@ -152,4 +166,16 @@ function testListInventoryDetails() {
 function testDeleteInventoryDetail() {
   // deleteInventoryDetailByItemCode_("A00002");
   return deleteRow_("inventory_details", { item_code: "A00002" });
+}
+
+function testFetchRowInventoryDetail() {
+  const result = fetchRow_("inventory_details", "item_code", "A00002");
+  Logger.log(result);
+  // Expected: { ok: true, item: { item_code: "A00002", ... } }
+}
+
+function testFetchRowWithSchema() {
+  const result = fetchRow_("products", "id", 1, "tb_mgmt");
+  Logger.log(result);
+  // Expected: { ok: true, item: { id: 1, ... } } or { ok: true, item: null }
 }

@@ -1,11 +1,17 @@
 import { serve } from "https://deno.land/std/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// ------ Summary ------ 
+// GET - 單筆查詢
+// LIST - 列表查詢
+// UPSERT - 新增/更新（包含 CREATE 功能）
+// DELETE - 軟刪除（更新 status_id = inactive）
 
 // ---- Request payload types ----
 type UpsertPayload = {
   op: "upsert";
   event_id: string;
   table?: string; // default to "items" if missing
+  schema?: string; // optional schema, defaults to "public"
   row: Record<string, any>; // generic row data
   conflict_columns?: string[]; // optional, for upsert conflict resolution
 };
@@ -14,11 +20,37 @@ type DeletePayload = {
   op: "delete";
   event_id: string;
   table?: string; // default to "items" if missing
+  schema?: string; // optional schema, defaults to "public"
   filter: Record<string, any>; // e.g. { name: "foo" } or { id: 123 }
   deleted_at?: string;
 };
 
 type Payload = UpsertPayload | DeletePayload;
+
+// Cache for status IDs to avoid repeated lookups
+let cachedActiveStatusId: number | null = null;
+let cachedInactiveStatusId: number | null = null;
+
+async function getStatusIds(supabase: any) {
+  if (!cachedActiveStatusId || !cachedInactiveStatusId) {
+    const { data, error } = await supabase
+      .from("status")
+      .select("id, status")
+      .in("status", ["active", "inactive"]);
+
+    if (error || !data) {
+      throw new Error("Failed to fetch status IDs");
+    }
+
+    cachedActiveStatusId = data.find((s: any) => s.status === "active")?.id;
+    cachedInactiveStatusId = data.find((s: any) => s.status === "inactive")?.id;
+  }
+
+  return {
+    activeStatusId: cachedActiveStatusId!,
+    inactiveStatusId: cachedInactiveStatusId!,
+  };
+}
 
 serve(async (req) => {
   // 0) Shared-secret auth for ALL methods (GET/POST)
@@ -36,7 +68,8 @@ serve(async (req) => {
   if (req.method === "GET") {
     const url = new URL(req.url);
     const table = url.searchParams.get("table") || "items"; // default table
-    
+    const schema = url.searchParams.get("schema") || "public"; // default schema
+
     // Common params
     const includeDeleted = url.searchParams.get("include_deleted") === "true";
     const limitRaw = url.searchParams.get("limit") ?? "50";
@@ -49,26 +82,17 @@ serve(async (req) => {
     // get single item by filter
     if (filterCol && filterVal) {
       let q = supabase
+        .schema(schema)
         .from(table)
         .select("*")
         .eq(filterCol, filterVal)
         .limit(1);
 
-      // Only apply deleted_at check if the table has that column (assuming standard schema)
-      // For simplicity, we assume tables might have deleted_at. If not, this might error or be ignored.
-      // A safer way is to check table metadata, but for now we assume convention.
-      if (!includeDeleted) {
-        // We try to filter deleted_at only if we think it exists. 
-        // Or we just try it. If column doesn't exist, Supabase/Postgres might throw error.
-        // For "stores" table, we don't have deleted_at in the SQL provided, so we should skip this 
-        // or add deleted_at to stores table. 
-        // Based on user request, stores table has store_status, maybe use that?
-        // For generic approach, let's assume standard soft delete column "deleted_at" if it exists.
-        // If the table doesn't have deleted_at, we might need to skip this filter or handle error.
-        // For now, let's apply it only for "items" or tables known to have it.
-        if (table === "items") {
-           q = q.is("deleted_at", null);
-        }
+      // Filter by active status (soft delete support)
+      // Skip status_id filter for the status table itself
+      if (!includeDeleted && table !== "status") {
+        const { activeStatusId } = await getStatusIds(supabase);
+        q = q.eq("status_id", activeStatusId);
       }
 
       const { data, error } = await q.maybeSingle();
@@ -96,17 +120,21 @@ serve(async (req) => {
 
     // list items
     let q = supabase
+      .schema(schema)
       .from(table)
       .select("*")
       .limit(limit);
-      
+
     // Try to order by updated_at if possible, else just default order
     // We can't easily know if updated_at exists for all tables without metadata check.
     // But stores and items both have updated_at.
     q = q.order("updated_at", { ascending: false });
 
-    if (!includeDeleted && table === "items") {
-       q = q.is("deleted_at", null);
+    // Filter by active status (soft delete support)
+    // Skip status_id filter for the status table itself
+    if (!includeDeleted && table !== "status") {
+      const { activeStatusId } = await getStatusIds(supabase);
+      q = q.eq("status_id", activeStatusId);
     }
 
     const { data, error } = await q;
@@ -163,6 +191,7 @@ serve(async (req) => {
 
   // 6) Apply operation
   const table = payload.table || "items"; // default to items for backward compatibility
+  const schema = payload.schema || "public"; // default schema
 
   if (payload.op === "upsert") {
     const row = payload.row;
@@ -174,10 +203,11 @@ serve(async (req) => {
     if (!row.updated_at) {
       row.updated_at = new Date().toISOString();
     }
-    
-    // For items table, handle deleted_at revival logic
-    if (table === "items") {
-      row.deleted_at = null;
+
+    // Ensure status is active on upsert (revival of soft-deleted records)
+    if (!row.status_id) {
+      const { activeStatusId } = await getStatusIds(supabase);
+      row.status_id = activeStatusId;
     }
 
     // Upsert
@@ -193,6 +223,7 @@ serve(async (req) => {
     }
     
     const { error: upsertErr } = await supabase
+      .schema(schema)
       .from(table)
       .upsert(row, { onConflict: conflict.join(",") });
 
@@ -205,45 +236,27 @@ serve(async (req) => {
   } else if (payload.op === "delete") {
     const filter = payload.filter;
     if (!filter || Object.keys(filter).length === 0) {
-       // Backward compatibility for "items" table using "name"
-       if (table === "items" && (payload as any).name) {
-         // convert old payload format to filter
-       } else {
-         return new Response("Missing filter for delete", { status: 400 });
-       }
+      return new Response("Missing filter for delete", { status: 400 });
     }
 
-    // Handle backward compatibility for items table delete payload
-    let finalFilter = filter;
-    if (table === "items" && (payload as any).name && !finalFilter) {
-      finalFilter = { name: (payload as any).name };
-    }
+    // Soft delete: update status_id to inactive
+    const { inactiveStatusId } = await getStatusIds(supabase);
+    const updatedAt = new Date().toISOString();
 
-    // Check if table supports soft delete
-    // 'items' has deleted_at. 'stores' does not (based on SQL).
-    // If stores table needs soft delete, we should update SQL or use store_status='inactive'.
-    // For now, let's assume hard delete for stores, soft delete for items.
-    
-    if (table === "items") {
-      const deletedAt = payload.deleted_at ?? new Date().toISOString();
-      const { error: delErr } = await supabase
-        .from(table)
-        .update({ deleted_at: deletedAt, updated_at: deletedAt })
-        .match(finalFilter);
-        
-      if (delErr) {
-        return new Response(JSON.stringify(delErr), { status: 400, headers: { "Content-Type": "application/json" } });
-      }
-    } else {
-      // Hard delete for other tables (like stores)
-      const { error: delErr } = await supabase
-        .from(table)
-        .delete()
-        .match(finalFilter);
-        
-      if (delErr) {
-        return new Response(JSON.stringify(delErr), { status: 400, headers: { "Content-Type": "application/json" } });
-      }
+    const { error: delErr } = await supabase
+      .schema(schema)
+      .from(table)
+      .update({
+        status_id: inactiveStatusId,
+        updated_at: updatedAt,
+      })
+      .match(filter);
+
+    if (delErr) {
+      return new Response(JSON.stringify(delErr), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   } else {
     return new Response("Unknown op", { status: 400 });

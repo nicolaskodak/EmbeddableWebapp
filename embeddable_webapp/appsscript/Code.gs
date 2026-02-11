@@ -231,6 +231,113 @@ function callSupabaseEdgeJson_(method, params, payload) {
   return json;
 }
 
+/**
+ * 通用 Fetch (查詢)
+ * @param {string} table 表格名稱
+ * @param {Object} queryParams 查詢參數 (例如 { limit: 10, col: "name", val: "apple" })
+ */
+function fetchRows_(table, queryParams) {
+  const params = { table: table, ...queryParams };
+  return callSupabaseEdgeJson_("get", params, null);
+}
+
+/**
+ * 通用 Fetch Single Row (單筆查詢)
+ * @param {string} table 表格名稱
+ * @param {string} column 查詢欄位名稱
+ * @param {*} value 查詢值
+ * @param {string} [schema] 可選的 schema (例如 'tb_mgmt')
+ * @return {Object} Edge Function 回應 { ok: true, item: {...} } 或 { ok: true, item: null }
+ */
+function fetchRow_(table, column, value, schema) {
+  const params = { table: table, col: column, val: value };
+  if (schema) { params.schema = schema; }
+  return callSupabaseEdgeJson_("get", params, null);
+}
+
+/**
+ * 通用 Upsert (新增或更新)
+ * @param {string} table 表格名稱
+ * @param {Object} row 資料列物件
+ * @param {string[]} conflictColumns 衝突判斷欄位 (例如 ['id'] 或 ['name'])
+ * @param {string} schema 可選的 schema (例如 'tb_mgmt')
+ */
+function upsertRow_(table, row, conflictColumns, schema) {
+  const payload = {
+    op: "upsert",
+    event_id: Utilities.getUuid(),
+    table: table,
+    row: row,
+    conflict_columns: conflictColumns
+  };
+  if (schema) {
+    payload.schema = schema;
+  }
+  return callSupabaseEdgeJson_("post", null, payload);
+}
+
+/**
+ * 通用 Delete (刪除)
+ * @param {string} table 表格名稱
+ * @param {Object} filter 刪除條件 (例如 { id: 123 } 或 { name: "apple" })
+ * @param {string} schema 可選的 schema (例如 'tb_mgmt')
+ */
+function deleteRow_(table, filter, schema) {
+  const payload = {
+    op: "delete",
+    event_id: Utilities.getUuid(),
+    table: table,
+    filter: filter
+  };
+  if (schema) {
+    payload.schema = schema;
+  }
+  return callSupabaseEdgeJson_("post", null, payload);
+}
+
+/* =========================================
+   Status 缓存（避免重复查询）
+   ========================================= */
+var CACHED_STATUS_IDS = null;
+
+/**
+ * 获取 status IDs（缓存机制）
+ * @return {Object} { active: number, inactive: number }
+ */
+function getStatusIds_() {
+  if (CACHED_STATUS_IDS) {
+    return CACHED_STATUS_IDS;
+  }
+
+  var result = fetchRows_("status", { limit: 10, schema: "tb_mgmt" });
+  if (!result || !result.ok || !result.items) {
+    throw new Error("Failed to fetch status");
+  }
+
+  var activeStatus = result.items.find(function(s) { return s.status === "active"; });
+  var inactiveStatus = result.items.find(function(s) { return s.status === "inactive"; });
+
+  if (!activeStatus || !inactiveStatus) {
+    throw new Error("Status 'active' or 'inactive' not found");
+  }
+
+  CACHED_STATUS_IDS = {
+    active: activeStatus.id,
+    inactive: inactiveStatus.id
+  };
+
+  Logger.log("Status IDs cached: " + JSON.stringify(CACHED_STATUS_IDS));
+  return CACHED_STATUS_IDS;
+}
+
+/**
+ * 清除 status 缓存（仅用于测试或强制刷新）
+ */
+function clearStatusCache_() {
+  CACHED_STATUS_IDS = null;
+}
+
+
 /* =========================================
    Module A: POS 名稱對應
    ========================================= */
@@ -695,50 +802,80 @@ function deleteStoreRowById_(sheet, id) {
    ========================================= */
 
 function getModuleEData() {
-  // 1) 來源：Google Sheet 的 erp_inventory（列出所有庫存品項）
+  // 1) Google Sheet 的 erp_inventory（所有库存品项）
   var erpItems = getTableData(DB_CONFIG.erp_inventory.name) || [];
   var units = getTableData(DB_CONFIG.units.name) || [];
+
+  // 建立 unit_id -> unit_name 映射
   var unitMap = {};
   units.forEach(function (u) {
     unitMap[String(u.unit_id)] = u.unit_name;
   });
 
-  // 2) 來源：Supabase inventory_details（依 item_code = product_code 合併）
-  var detailsResp = callSupabaseEdgeJson_('get', { table: 'inventory_details', limit: 200 }, null);
-  var details = (detailsResp && detailsResp.items) ? detailsResp.items : [];
-  var detailMap = {};
-  details.forEach(function (d) {
-    var code = String(d.item_code || '').trim();
-    if (code) detailMap[code] = d;
+  // 2) Supabase inventory_details（使用 fetchRows_ helper）
+  var detailsResp = fetchRows_("inventory_details", {
+    limit: 200,
+    schema: "tb_mgmt",
+    include_deleted: "false"  // 只获取 active 记录
   });
 
-  // 3) 合併回傳給前端（每個品項一列）
+  if (!detailsResp || !detailsResp.ok) {
+    Logger.log("Warning: Failed to fetch inventory_details from Supabase");
+    // 继续执行，但 details 为空数组
+  }
+
+  var details = (detailsResp && detailsResp.items) ? detailsResp.items : [];
+
+  // 3) 建立 erp_inventory_id -> inventory_details 映射
+  var detailMap = {};
+  details.forEach(function (d) {
+    var erpInvId = String(d.erp_inventory_id || '');
+    if (erpInvId) {
+      detailMap[erpInvId] = d;
+    }
+  });
+
+  // 4) 合并数据（每个 erp_inventory 品项一行）
   var merged = erpItems.map(function (e) {
-    var code = String(e.product_code || '').trim();
+    var erpInvId = String(e.erp_inventory_id || '');
+    var productCode = String(e.product_code || '').trim();
+    var erpInvName = e.erp_inventory_name || '';
+    var unitName = unitMap[String(e.inventory_unit_id)] || '';
+
+    var det = erpInvId ? (detailMap[erpInvId] || null) : null;
+
+    // 基础信息（来自 erp_inventory）
     var base = {
-      product_code: e.product_code,
-      erp_inventory_name: e.erp_inventory_name,
-      unit_name: unitMap[String(e.inventory_unit_id)] || ''
+      product_code: productCode,
+      erp_inventory_name: erpInvName,
+      unit_name: unitName,
+      _has_detail: !!det
     };
 
-    var det = code ? (detailMap[code] || null) : null;
     if (!det) {
-      return {
-        item_code: code,
-        item_name: e.erp_inventory_name,
-        unit: unitMap[String(e.inventory_unit_id)] || '',
-        _has_detail: false
-      };
+      // 没有详细数据
+      return base;
     }
 
-    // 以 detail 欄位為主（但確保 item_code / item_name 有值）
-    var out = {};
-    Object.keys(det).forEach(function (k) { out[k] = det[k]; });
-    if (!out.item_code) out.item_code = code;
-    if (!out.item_name) out.item_name = e.erp_inventory_name;
-    if (!out.unit) out.unit = unitMap[String(e.inventory_unit_id)] || '';
-    out._has_detail = true;
-    return out;
+    // 有详细数据：合并 inventory_details 的业务字段
+    // 过滤掉不需要的字段：id, public_id, erp_inventory_id, created_at, status_id
+    return {
+      product_code: productCode,
+      erp_inventory_name: erpInvName,
+      unit_name: unitName,
+      category: det.category,
+      rank: det.rank,
+      shelf_life_days: det.shelf_life_days,
+      shelf_life_category: det.shelf_life_category,
+      sales_grade: det.sales_grade,
+      lead_time_days: det.lead_time_days,
+      delivery: det.delivery,
+      max_purchase_param: det.max_purchase_param,
+      safety_stock_param: det.safety_stock_param,
+      inventory_turnover_days: det.inventory_turnover_days,
+      updated_at: det.updated_at,  // 保留更新时间供前端参考
+      _has_detail: true
+    };
   });
 
   return merged;
@@ -746,51 +883,122 @@ function getModuleEData() {
 
 function upsertInventoryDetail(form) {
   form = form || {};
-  var itemCode = String(form.item_code || '').trim();
-  if (!itemCode) throw new Error('missing item_code');
 
+  // 1) 前端传递 product_code，需要查询 erp_inventory_id
+  var productCode = String(form.product_code || '').trim();
+  if (!productCode) {
+    throw new Error('Missing product_code');
+  }
+
+  // 2) 查询 erp_inventory 获取 erp_inventory_id（使用 fetchRow_ helper）
+  var erpResp = fetchRow_("erp_inventory", "product_code", productCode, "tb_mgmt");
+  if (!erpResp || !erpResp.ok || !erpResp.item) {
+    throw new Error("ERP inventory not found for product_code: " + productCode);
+  }
+
+  var erpInventoryId = erpResp.item.id;
+
+  // 3) 获取 active status ID（使用缓存）
+  var statusIds = getStatusIds_();
+
+  // 4) 准备 inventory_details 数据
+  // 只包含业务字段，不包含关联表字段（item_name, unit 等）
   var row = {
-    item_code: itemCode,
-    category: form.category,
-    rank: form.rank,
-    item_name: form.item_name,
-    unit: form.unit,
-    shelf_life_days: form.shelf_life_days,
-    shelf_life_category: form.shelf_life_category,
-    sales_grade: form.sales_grade,
-    lead_time_days: form.lead_time_days,
-    delivery: form.delivery,
-    max_purchase_param: form.max_purchase_param,
-    safety_stock_param: form.safety_stock_param,
-    inventory_turnover_days: form.inventory_turnover_days
+    erp_inventory_id: erpInventoryId,
+    category: form.category || null,
+    rank: form.rank || null,
+    shelf_life_days: form.shelf_life_days || null,
+    shelf_life_category: form.shelf_life_category || null,
+    sales_grade: form.sales_grade || null,
+    lead_time_days: form.lead_time_days || null,
+    delivery: form.delivery || null,
+    max_purchase_param: form.max_purchase_param || null,
+    safety_stock_param: form.safety_stock_param || null,
+    inventory_turnover_days: form.inventory_turnover_days || null,
+    status_id: statusIds.active,  // 确保是 active 状态
+    updated_at: new Date().toISOString()  // 自动更新时间
   };
 
-  callSupabaseEdgeJson_('post', null, {
-    op: 'upsert',
-    event_id: Utilities.getUuid(),
-    table: 'inventory_details',
-    row: row,
-    conflict_columns: ['item_code']
-  });
+  // 5) 使用 upsertRow_ helper（基于 erp_inventory_id 冲突）
+  var result = upsertRow_(
+    "inventory_details",
+    row,
+    ["erp_inventory_id"],  // conflict column
+    "tb_mgmt"  // schema
+  );
 
+  if (!result || !result.ok) {
+    throw new Error("Failed to upsert inventory_detail");
+  }
+
+  // 6) 返回更新后的完整数据
   return getModuleEData();
 }
 
-function testGetInventoryDetail() {
-  // getInventoryDetailByItemCode_("A00002");
-  // return fetchRows_("inventory_details", { col: "item_code", val: "A00002" });
-  const res = callSupabaseEdgeJson_("get", { schema: "tb_mgmt", table: "erp_inventory", col: "erp_inventory_name", val: "◎熱狗" }, null);
-  Logger.log(res)
+function testGetModuleEData() {
+  var data = getModuleEData();
+  Logger.log("Total items: " + data.length);
+  Logger.log("Sample: " + JSON.stringify(data[0]));
+  return data;
 }
 
-function testUpdateInventoryDetail() {
-  // 同 item_code 會更新（依 ON CONFLICT item_code）
-  return callSupabaseEdgeJson_("post", null, { op: "upsert", event_id: Utilities.getUuid(), schema: "public", table: "inventory_details", row: {item_code: "A00005", lead_time_days: 99}, conflicte_columns: ["item_code"] });
+function testUpsertInventoryDetail() {
+  // 测试：更新某个品项的详细信息
+  var form = {
+    product_code: "A00002",  // 前端传递 product_code
+    category: "长效*热销",
+    rank: 1,
+    shelf_life_days: 365,
+    shelf_life_category: "长效*",
+    sales_grade: "热销",
+    lead_time_days: 7,
+    delivery: "W2、5；W5会较多",
+    max_purchase_param: 7,
+    safety_stock_param: 10,
+    inventory_turnover_days: 17.5
+  };
+
+  return upsertInventoryDetail(form);
 }
 
 function testDeleteInventoryDetail() {
-  // deleteInventoryDetailByItemCode_("A00002");
-  const params = null;
-  const body = { table:"inventory_details", schema: "public", op: "delete", event_id: Utilities.getUuid(), filter: { item_code: "A00012" } };
-  return callSupabaseEdgeJson_( "post", null, body);
+  // 使用 deleteRow_ helper 进行软删除
+  var productCode = "A00012";
+
+  // 1) 先查询 erp_inventory_id
+  var erpResp = fetchRow_("erp_inventory", "product_code", productCode, "tb_mgmt");
+  if (!erpResp || !erpResp.ok || !erpResp.item) {
+    throw new Error("ERP inventory not found");
+  }
+
+  var erpInventoryId = erpResp.item.id;
+
+  // 2) 使用 deleteRow_ 进行软删除（更新 status_id = inactive）
+  var result = deleteRow_(
+    "inventory_details",
+    { erp_inventory_id: erpInventoryId },
+    "tb_mgmt"
+  );
+
+  Logger.log("Delete result: " + JSON.stringify(result));
+  return result;
+}
+
+function testFetchInventoryDetail() {
+  // 使用 fetchRow_ helper 查询单条记录
+  var productCode = "A00002";
+
+  // 1) 先查询 erp_inventory_id
+  var erpResp = fetchRow_("erp_inventory", "product_code", productCode, "tb_mgmt");
+  if (!erpResp || !erpResp.ok || !erpResp.item) {
+    return { error: "ERP inventory not found" };
+  }
+
+  var erpInventoryId = erpResp.item.id;
+
+  // 2) 查询 inventory_details
+  var detailResp = fetchRow_("inventory_details", "erp_inventory_id", erpInventoryId, "tb_mgmt");
+
+  Logger.log("Detail: " + JSON.stringify(detailResp));
+  return detailResp;
 }
