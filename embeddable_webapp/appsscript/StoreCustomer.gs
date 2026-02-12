@@ -69,7 +69,7 @@ function getModuleDData() {
         id: s.id,
         erp_customer_name: erpCustomerName,  // TEXT（从 FK 转换而来）
         pos_store_name: posStoreName,  // TEXT（从 FK 转换而来）
-        address_zh: s.address_zh,  // 修正字段名
+        address_zhtw: s.address_zh,  // DB address_zh → 前端 address_zhtw
         address_en: s.address_en,
         country: s.country || '台灣',
         city: s.city,
@@ -176,7 +176,7 @@ function updateStoreDetails(form) {
     var row = {
       erp_customer_name: erpCustomerId,  // BIGINT FK (required)
       pos_store_name: posStoreId,  // BIGINT FK (可以为 null)
-      address_zh: form.address_zh || null,  // 修正字段名
+      address_zh: form.address_zhtw || null,  // 前端 address_zhtw → DB address_zh
       address_en: form.address_en || null,
       country: form.country || '台灣',
       city: form.city || null,

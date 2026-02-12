@@ -1,28 +1,30 @@
 /* =========================================
-   Module E: 庫存細節 (Supabase inventory_details + Sheet erp_inventory)
+   Module E: 庫存細節 (Supabase)
    ========================================= */
 
 function getModuleEData() {
-  // 1) Google Sheet 的 erp_inventory（所有库存品项）
-  var erpItems = getTableData(DB_CONFIG.erp_inventory.name) || [];
-  var units = getTableData(DB_CONFIG.units.name) || [];
+  // 1) 從 Supabase 查詢 erp_inventory 和 units
+  var erpResp = fetchRows_("erp_inventory", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
+  var unitsResp = fetchRows_("units", { limit: 200, schema: "tb_mgmt", include_deleted: "false" });
 
-  // 建立 unit_id -> unit_name 映射
+  var erpItems = (erpResp && erpResp.ok && erpResp.items) ? erpResp.items : [];
+  var rawUnits = (unitsResp && unitsResp.ok && unitsResp.items) ? unitsResp.items : [];
+
+  // 建立 unit id -> unit_name 映射
   var unitMap = {};
-  units.forEach(function (u) {
-    unitMap[String(u.unit_id)] = u.unit_name;
+  rawUnits.forEach(function (u) {
+    unitMap[String(u.id)] = u.unit_name;
   });
 
-  // 2) Supabase inventory_details（使用 fetchRows_ helper）
+  // 2) 查詢 inventory_details
   var detailsResp = fetchRows_("inventory_details", {
     limit: 200,
     schema: "tb_mgmt",
-    include_deleted: "false"  // 只获取 active 记录
+    include_deleted: "false"
   });
 
   if (!detailsResp || !detailsResp.ok) {
     Logger.log("Warning: Failed to fetch inventory_details from Supabase");
-    // 继续执行，但 details 为空数组
   }
 
   var details = (detailsResp && detailsResp.items) ? detailsResp.items : [];
@@ -36,16 +38,16 @@ function getModuleEData() {
     }
   });
 
-  // 4) 合并数据（每个 erp_inventory 品项一行）
+  // 4) 合併資料（每個 erp_inventory 品項一行）
   var merged = erpItems.map(function (e) {
-    var erpInvId = String(e.erp_inventory_id || '');
+    var erpInvId = String(e.id || '');
     var productCode = String(e.product_code || '').trim();
     var erpInvName = e.erp_inventory_name || '';
     var unitName = unitMap[String(e.inventory_unit_id)] || '';
 
     var det = erpInvId ? (detailMap[erpInvId] || null) : null;
 
-    // 基础信息（来自 erp_inventory）
+    // 基礎資訊（來自 erp_inventory）
     var base = {
       product_code: productCode,
       erp_inventory_name: erpInvName,
@@ -54,12 +56,10 @@ function getModuleEData() {
     };
 
     if (!det) {
-      // 没有详细数据
       return base;
     }
 
-    // 有详细数据：合并 inventory_details 的业务字段
-    // 过滤掉不需要的字段：id, public_id, erp_inventory_id, created_at, status_id
+    // 有詳細資料：合併 inventory_details 的業務欄位
     return {
       product_code: productCode,
       erp_inventory_name: erpInvName,
@@ -74,7 +74,7 @@ function getModuleEData() {
       max_purchase_param: det.max_purchase_param,
       safety_stock_param: det.safety_stock_param,
       inventory_turnover_days: det.inventory_turnover_days,
-      updated_at: det.updated_at,  // 保留更新时间供前端参考
+      updated_at: det.updated_at,
       _has_detail: true
     };
   });
